@@ -25,7 +25,9 @@ export default function Home() {
   const [seller, setSeller] = useState<CompanyProfile>(ZAMP);
   const started = live || !!record;
 
+  const [ready, setReady] = useState(false);
   useEffect(() => {
+    setReady(true);
     setS(getSender());
     setPurposes(listPurposes());
     setSeller(getCompany());
@@ -103,7 +105,7 @@ export default function Home() {
           )}
           <button
             type="submit"
-            disabled={!canRun || live}
+            disabled={!ready || !canRun || live}
             className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-ink px-6 text-[14px] font-medium text-white hover:bg-black disabled:cursor-not-allowed disabled:opacity-40"
           >
             {live ? <Loader2 size={16} className="spin" /> : null}
@@ -129,7 +131,7 @@ export default function Home() {
                   type="button"
                   key={d.label}
                   title={d.what}
-                  disabled={live}
+                  disabled={!ready || live}
                   onClick={() => {
                     setPurpose(d.purpose);
                     if (d.linkedinUrl) {
