@@ -1,4 +1,4 @@
-import { PLAYBOOKS, SUPPRESSION_LIST, type Playbook } from "./playbooks";
+import { isOfferMode, resolveCompany, resolvePlaybook, type CompanyProfile, type Playbook } from "./playbooks";
 import { checkDraft } from "./quality";
 import { runAnalyst, runWriter } from "./llm";
 import {
@@ -37,7 +37,9 @@ function isExecutive(seniority?: string, title?: string) {
 
 export async function runPipeline(input: RunInput, emit: Emit): Promise<RunResult> {
   const t0 = Date.now();
-  const playbook = PLAYBOOKS[input.purpose];
+  const playbook = resolvePlaybook(input.purpose, input.playbookMd);
+  const seller = resolveCompany(input.companyMd);
+  const blocked = (name?: string) => !!name && seller.doNotContact.includes(String(name).toLowerCase());
   const result: RunResult = {
     status: "error",
     purpose: input.purpose,
@@ -81,7 +83,7 @@ export async function runPipeline(input: RunInput, emit: Emit): Promise<RunResul
         const co = await identifyCompany(input.company);
         credits += co.credits;
         companyRef = co.value ? { id: co.value.id, name: co.value.name } : null;
-        if (companyRef && SUPPRESSION_LIST.includes(companyRef.name.toLowerCase())) {
+        if (companyRef && blocked(companyRef.name)) {
           return { value: { suppressed: companyRef.name }, credits, detail: "On the do-not-contact list" };
         }
       }
@@ -114,7 +116,7 @@ export async function runPipeline(input: RunInput, emit: Emit): Promise<RunResul
       return finish({
         ...result,
         status: "skipped",
-        edge: { kind: "suppressed", title: `${rv.suppressed} is already a Zamp customer`, message: "Customers are on the do-not-contact list for cold outreach. Route this to the account owner instead." },
+        edge: { kind: "suppressed", title: `${rv.suppressed} is on ${seller.name}'s do-not-contact list`, message: "Companies on the do-not-contact list (usually existing customers) never get cold outreach. Route this to the account owner instead." },
       });
     }
     if (rv.res) {
@@ -175,9 +177,9 @@ export async function runPipeline(input: RunInput, emit: Emit): Promise<RunResul
     result.prospect = prospect;
     const companyId: number | undefined = (companyRef as any)?.id || person.companyId;
 
-    if (companyId && person.companyName && SUPPRESSION_LIST.includes(String(person.companyName).toLowerCase())) {
+    if (companyId && blocked(person.companyName)) {
       skip(later.slice(1), "Stopped");
-      return finish({ ...result, status: "skipped", edge: { kind: "suppressed", title: `${person.companyName} is already a Zamp customer`, message: "Customers are on the do-not-contact list for cold outreach." } });
+      return finish({ ...result, status: "skipped", edge: { kind: "suppressed", title: `${person.companyName} is on ${seller.name}'s do-not-contact list`, message: "Customers are on the do-not-contact list for cold outreach." } });
     }
 
     // ---------- 3. Gather signals in parallel ----------
@@ -191,7 +193,8 @@ export async function runPipeline(input: RunInput, emit: Emit): Promise<RunResul
         : (skip(["company"], "No company"), Promise.resolve(null)),
       companyId
         ? stage("hiring", async () => {
-            const j = await financeJobs(companyId, playbook.jobKeywords);
+            if (!playbook.jobKeywords.length) return { value: [], credits: 0, detail: "This playbook lists no hiring keywords" };
+            const j = await financeJobs(companyId, playbook.jobKeywords, playbook.builtIn);
             return { ...j, detail: `${j.value.length} relevant postings (90 days)` };
           }).catch(() => [])
         : (skip(["hiring"], "No company"), Promise.resolve([])),
@@ -230,10 +233,16 @@ export async function runPipeline(input: RunInput, emit: Emit): Promise<RunResul
       webNews: (news as any)?.company || [],
       personPress: (news as any)?.person || [],
     };
-    const signals = buildSignals(raw, input.purpose);
+    const hiringTopic = playbook.builtIn
+      ? "finance or operations"
+      : playbook.jobKeywords.slice(0, 3).map((k) => k.toLowerCase()).join(", ").replace(/, ([^,]*)$/, " or $1");
+    const signals = buildSignals(raw, isOfferMode(playbook), hiringTopic);
     for (const s of signals) result.sources[s.id] = { label: `${s.label}, ${s.sourceName}`, url: s.sourceUrl, date: s.date };
-    for (const p of playbook.proofPoints) result.sources[p.id] = { label: `Proof point, ${p.source}`, url: p.sourceUrl };
-    if (playbook.event) result.sources["event"] = { label: "Event details (sample event)" };
+    result.sources["seller"] = { label: `${seller.name} company profile` };
+    for (const p of seller.products) result.sources[p.id] = { label: `Product suite: ${p.name}` };
+    for (const p of seller.proofPoints) result.sources[p.id] = { label: `Proof point, ${p.source}`, url: p.sourceUrl };
+    if (isOfferMode(playbook)) result.sources["offer"] = { label: `${playbook.name} playbook: offer` };
+    if (playbook.details) result.sources["details"] = { label: `${playbook.name} playbook: details` };
     if (input.note) result.sources["rep_note"] = { label: "Rep's note" };
 
     // ---------- 4. Analyst ----------
@@ -246,6 +255,7 @@ export async function runPipeline(input: RunInput, emit: Emit): Promise<RunResul
         };
       }
       const a = await runAnalyst({
+        seller: { name: seller.name, about: seller.about, products: seller.products.map((p) => ({ id: p.id, name: p.name, fits_when: p.fitsWhen })) },
         purpose: purposeForLLM(playbook),
         prospect: {
           name: prospect.name,
@@ -325,11 +335,19 @@ export async function runPipeline(input: RunInput, emit: Emit): Promise<RunResul
       result.sources["role"] = { label: "Role and company, Profile", url: prospect.profileUrl };
     }
     result.hook = hook;
+    const supporting = judged
+      .filter((s) => !s.excluded && s.id !== hook.source_id && s.judgement?.usable_fact && (s.judgement?.relevance ?? 0) >= 3)
+      .slice(0, 2)
+      .map((s) => ({ source_id: s.id, usable_fact: s.judgement!.usable_fact }));
+    result.supporting = supporting;
 
     // ---------- 6 + 7. Draft and check ----------
     const written = await stage("draft", async () => {
       const w = await writeDraft({
         purpose: input.purpose,
+        playbookMd: input.playbookMd,
+        companyMd: input.companyMd,
+        supporting,
         sender: input.sender,
         prospect,
         company,
@@ -363,48 +381,71 @@ export async function runPipeline(input: RunInput, emit: Emit): Promise<RunResul
 
 function purposeForLLM(p: Playbook) {
   return {
-    id: p.id,
+    name: p.name,
     goal: p.goal,
     target_roles: p.targetRoles,
     strong_signals: p.strongSignals,
     avoid: p.avoid,
-    event: p.event ? { name: p.event.name, date: p.event.date, city: p.event.city, topic: p.event.topic, audience: p.event.audience } : undefined,
+    offer: p.offer,
+    details: p.details,
   };
 }
 
 export interface WriteInput {
   purpose: PurposeId;
+  playbookMd?: string;
+  companyMd?: string;
   sender: Sender;
   prospect: Prospect;
   company?: CompanyInfo;
   hook: Hook;
+  supporting?: { source_id: string; usable_fact: string }[];
   executive: boolean;
   lowPersonalization: boolean;
   note?: string;
   allowedSources: string[];
   attempt?: number;
+  /** Rep's regenerate instructions: what to add, remove or change */
+  feedback?: string;
+  previousDraft?: { subject: string; body: string };
 }
 
 export async function writeDraft(w: WriteInput): Promise<{ draft: Draft; quality?: QualityReport; tokens: number; calls: number }> {
-  const p = PLAYBOOKS[w.purpose];
-  const maxWords = w.executive ? Math.min(70, p.length.max) : p.length.max;
+  const p = resolvePlaybook(w.purpose, w.playbookMd);
+  const seller: CompanyProfile = resolveCompany(w.companyMd);
+  const maxWords = w.executive ? Math.min(Math.max(p.length.max - 15, p.length.min + 10), p.length.max) : p.length.max;
+  const neverSay = [...seller.neverSay, ...p.neverSay];
+  const feedback = (w.feedback || "").slice(0, 600);
   const base = {
+    seller: {
+      name: seller.name,
+      about: seller.about,
+      products: seller.products.map((x) => ({ id: x.id, name: x.name, does: x.does, fits_when: x.fitsWhen })),
+      proof_points: seller.proofPoints.map((x) => ({ id: x.id, text: x.text })),
+      never_say: seller.neverSay,
+    },
     purpose: {
-      id: p.id,
+      name: p.name,
+      goal: p.goal,
       offer: p.offer,
-      proof_points: p.proofPoints.map((x) => ({ id: x.id, text: x.text })),
+      details: p.details,
       cta_examples: p.ctaExamples,
-      length: { min: Math.min(p.length.min, maxWords - 10), max: maxWords },
+      tone: p.tone,
+      length: { min: Math.min(p.length.min, maxWords - 15), max: maxWords },
       never_say: p.neverSay,
-      event: p.event ? { name: p.event.name, format: p.event.format, date: p.event.date, city: p.event.city, topic: p.event.topic, audience: p.event.audience, takeaway: p.event.takeaway } : undefined,
+      extra: [p.extra, seller.extra].filter(Boolean).join("\n"),
     },
     sender: w.sender,
     prospect: { first_name: w.prospect.firstName, title: w.prospect.title, company: w.company?.name || "", executive: w.executive },
     hook: { source_id: w.hook.source_id, usable_fact: w.hook.usable_fact, date: w.hook.date, angle: w.hook.angle },
+    supporting: w.supporting || [],
     low_personalization: w.lowPersonalization,
     rep_note: w.note || "",
+    rep_feedback: feedback,
+    previous_draft: w.previousDraft || null,
     attempt: w.attempt || 1,
   };
+  const allowedSources = [...new Set([...w.allowedSources, "seller", "offer", "details", ...seller.products.map((x) => x.id), ...seller.proofPoints.map((x) => x.id), ...(w.supporting || []).map((x) => x.source_id), ...(feedback ? ["rep_feedback"] : [])])];
   let tokens = 0;
   let calls = 0;
   const first = await runWriter(base);
@@ -412,7 +453,7 @@ export async function writeDraft(w: WriteInput): Promise<{ draft: Draft; quality
   calls += 1;
   let draft = first.data;
   if (draft.status !== "ok") return { draft, tokens, calls };
-  const opts = { maxWords, allowedSources: w.allowedSources, neverSay: p.neverSay };
+  const opts = { maxWords, allowedSources, neverSay };
   let quality = checkDraft(draft, opts);
   if (!quality.passes) {
     const retry = await runWriter({ ...base, previous_problems: quality.issues });

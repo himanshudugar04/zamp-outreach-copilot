@@ -1,4 +1,5 @@
-export type PurposeId = "sales_outreach" | "event_invite";
+/** "sales_outreach", "event_invite", or the id of a playbook the rep uploaded. */
+export type PurposeId = string;
 
 export type StageId =
   | "resolve"
@@ -32,6 +33,12 @@ export interface RunInput {
   company?: string;
   linkedinUrl?: string;
   purpose: PurposeId;
+  /** Display name of the purpose, kept with the run for the dashboard */
+  purposeName?: string;
+  /** Uploaded purpose playbook (markdown). Absent → built-in playbook for this purpose id. */
+  playbookMd?: string;
+  /** Uploaded company profile (markdown). Absent → built-in Zamp profile. */
+  companyMd?: string;
   note?: string;
   sender: Sender;
   /** Re-target flow: find who replaced someone at a company */
@@ -180,6 +187,8 @@ export interface Draft {
   body: string;
   claims: Claim[];
   insufficient_reason: string;
+  /** Set when the rep's regenerate feedback could not be fully followed, and why */
+  feedback_note?: string;
 }
 
 export interface QualityReport {
@@ -214,6 +223,8 @@ export interface RunResult {
   company?: CompanyInfo;
   signals: ScoredSignal[];
   hook?: Hook;
+  /** Extra usable facts the writer may draw on besides the hook */
+  supporting?: { source_id: string; usable_fact: string }[];
   analysisNotes?: string[];
   personaFit?: Analysis["persona_fit"];
   executive?: boolean;

@@ -63,8 +63,9 @@ export default function Dashboard() {
         <div className="flex items-center gap-3">
           <select value={filter} onChange={(e) => setFilter(e.target.value as any)} className="h-9 rounded-md border border-rule bg-sheet px-2 text-[13px]" aria-label="Filter by purpose">
             <option value="all">All purposes</option>
-            <option value="sales_outreach">Sales outreach</option>
-            <option value="event_invite">Event invite</option>
+            {[...new Map(runs.map((r) => [r.input.purpose, r.input.purposeName || PLAYBOOKS[r.input.purpose]?.name || r.input.purpose])).entries()].map(([id, n]) => (
+              <option key={id} value={id}>{n}</option>
+            ))}
           </select>
           {runs.length > 0 && (
             <button onClick={() => { if (confirm("Clear all saved runs from this browser?")) { clearRuns(); setRuns([]); } }} className="text-[12px] text-ink-3 hover:text-brick">
@@ -124,7 +125,7 @@ export default function Dashboard() {
                       <Link href={`/runs/${r.id}`} className="font-medium hover:text-sky">{who}</Link>
                       <p className="text-2xs text-ink-3">{[r.result.prospect?.title, r.result.company?.name || r.input.company].filter(Boolean).join(", ")}</p>
                     </td>
-                    <td className="px-3 py-2.5 text-ink-2">{PLAYBOOKS[r.input.purpose].name}</td>
+                    <td className="px-3 py-2.5 text-ink-2">{r.input.purposeName || PLAYBOOKS[r.input.purpose]?.name || r.input.purpose}</td>
                     <td className={`px-3 py-2.5 font-medium ${st.cls}`}>{st.label}</td>
                     <td className="max-w-[280px] px-3 py-2.5 text-ink-2">
                       <span className="line-clamp-2">{r.result.edge ? r.result.edge.title : r.result.hook ? `${r.result.hook.label}: ${r.result.hook.usable_fact}` : r.result.error}</span>

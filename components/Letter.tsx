@@ -1,6 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
-import { Check, Copy, ExternalLink, Pencil, RefreshCw, X } from "lucide-react";
+import { Check, Copy, ExternalLink, Info, Pencil, RefreshCw, X } from "lucide-react";
 import type { Claim, Draft, QualityReport, RunResult } from "@/lib/types";
 
 type Seg = { text: string; n?: number };
@@ -29,6 +29,7 @@ function segment(body: string, claims: Claim[]): { segs: Seg[]; notes: { n: numb
 }
 
 const REJECT_REASONS = ["Wrong hook", "Wrong tone", "Factually off", "Wrong person"];
+const QUICK_ASKS = ["Make it shorter", "Less salesy, more peer to peer", "Lead with the news instead", "Name a different product", "Drop the customer proof point", "Warmer opening line"];
 
 export function Letter({
   result,
@@ -54,7 +55,7 @@ export function Letter({
   busy: boolean;
   onApprove: (subject: string, body: string) => void;
   onSaveEdit: (subject: string, body: string) => void;
-  onRegenerate: () => void;
+  onRegenerate: (feedback: string) => void;
   onReject: (reason: string) => void;
 }) {
   const subject = finalSubject ?? draft.subject;
@@ -66,6 +67,14 @@ export function Letter({
   const [rejecting, setRejecting] = useState(false);
   const [active, setActive] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
+  const [asking, setAsking] = useState(false);
+  const [fb, setFb] = useState("");
+  const left = 3 - regenerations;
+  const submitFb = (text: string) => {
+    onRegenerate(text.trim());
+    setAsking(false);
+    setFb("");
+  };
   const { segs, notes } = useMemo(() => segment(body, edited ? [] : draft.claims), [body, draft.claims, edited]);
 
   const approve = async () => {
@@ -148,6 +157,52 @@ export function Letter({
         </div>
       )}
 
+      {draft.feedback_note && !editing && (
+        <p className="mx-6 mb-4 flex gap-2 rounded-lg bg-rust-soft/60 px-3 py-2 text-[12px] text-ink-2">
+          <Info size={14} className="mt-0.5 shrink-0 text-rust" />
+          <span><span className="font-medium text-ink">Part of your request was not applied.</span> {draft.feedback_note}</span>
+        </p>
+      )}
+
+      {asking && !editing && (
+        <div className="border-t border-rule bg-sky-soft/50 px-6 py-4">
+          <label htmlFor="fb" className="text-[13px] font-medium text-ink">What should change?</label>
+          <p className="text-2xs text-ink-3">Tell it what to add, remove or change. It keeps every fact sourced, so it will say if it can't add something.</p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {QUICK_ASKS.map((q) => (
+              <button
+                type="button"
+                key={q}
+                onClick={() => setFb((v) => (v.includes(q) ? v : v ? `${v}. ${q}` : q))}
+                className="rounded-full border border-sky/30 bg-sheet px-2.5 py-0.5 text-[12px] text-sky-deep hover:border-sky"
+              >
+                {q}
+              </button>
+            ))}
+          </div>
+          <textarea
+            id="fb"
+            value={fb}
+            onChange={(e) => setFb(e.target.value)}
+            rows={3}
+            maxLength={600}
+            autoFocus
+            placeholder="e.g. Remove the Instacart line. Mention their Series F instead of hiring. End with a question about AP."
+            className="mt-2 w-full rounded-lg border border-rule bg-sheet px-3 py-2 text-[14px] placeholder:text-ink-3"
+          />
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <button onClick={() => submitFb(fb)} disabled={busy || !fb.trim()} className="inline-flex items-center gap-1.5 rounded-full bg-sky px-4 py-1.5 text-[13px] font-medium text-white hover:bg-sky-deep disabled:opacity-40">
+              <RefreshCw size={14} className={busy ? "spin" : ""} /> Redraft with these changes
+            </button>
+            <button onClick={() => submitFb("")} disabled={busy} className="rounded-full px-3 py-1.5 text-[13px] text-ink-2 hover:bg-sheet disabled:opacity-40">
+              Just try a fresh version
+            </button>
+            <button onClick={() => setAsking(false)} className="ml-auto text-[12px] text-ink-3 hover:text-ink">Cancel</button>
+            <span className="num w-full text-2xs text-ink-3">{left} redraft{left === 1 ? "" : "s"} left for this run</span>
+          </div>
+        </div>
+      )}
+
       {quality && !editing && <QualityStrip q={quality} />}
 
       {!editing && (
@@ -170,9 +225,9 @@ export function Letter({
               <button onClick={() => { setESub(subject); setEBody(body); setEditing(true); }} disabled={busy} className="inline-flex items-center gap-1.5 rounded-full border border-rule px-3.5 py-2 text-[13px] hover:bg-paper disabled:opacity-50">
                 <Pencil size={14} /> Edit
               </button>
-              <button onClick={onRegenerate} disabled={busy || regenerations >= 3} className="inline-flex items-center gap-1.5 rounded-full border border-rule px-3.5 py-2 text-[13px] hover:bg-paper disabled:opacity-50" title={regenerations >= 3 ? "Limit of 3 per run" : "Write a fresh version from the same hook"}>
-                <RefreshCw size={14} className={busy ? "spin" : ""} /> Regenerate
-                <span className="num text-2xs text-ink-3">{3 - regenerations} left</span>
+              <button onClick={() => setAsking((v) => !v)} disabled={busy || regenerations >= 3} aria-expanded={asking} className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-[13px] disabled:opacity-50 ${asking ? "border-sky bg-sky-soft text-sky-deep" : "border-rule hover:bg-paper"}`} title={regenerations >= 3 ? "Limit of 3 per run" : "Tell it what to change and redraft"}>
+                <RefreshCw size={14} className={busy ? "spin" : ""} /> {busy ? "Redrafting" : "Regenerate"}
+                <span className="num text-2xs text-ink-3">{left} left</span>
               </button>
               <button onClick={() => setRejecting(true)} disabled={busy} className="ml-auto inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-[13px] text-ink-2 hover:bg-brick-soft hover:text-brick disabled:opacity-50">
                 <X size={14} /> Reject

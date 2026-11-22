@@ -35,8 +35,11 @@ export function checkDraft(
   const grade = words.length ? 0.39 * (words.length / sentences) + 11.8 * (syl / words.length) - 15.59 : 0;
   const lower = (draft.subject + " " + draft.body).toLowerCase();
   const bannedFound = [...BANNED, ...opts.neverSay.map((s) => s.toLowerCase())].filter((b) => lower.includes(b));
-  const youCount = (text.match(/\b(you|your|you're|yours)\b/gi) || []).length;
-  const iCount = (text.match(/\b(i|i'm|i've|we|we're|our|us|my)\b/gi) || []).length;
+  // Part 1 is meant to introduce the sender, so the you-vs-we balance is judged on the rest.
+  const paras = draft.body.split(/\n\s*\n/).map((x) => x.trim()).filter((x) => x && !/^(hi|hey|hello|dear)\b[^\n]*,$/i.test(x) && x.split(/\s+/).length > 3);
+  const rest = paras.length >= 3 ? paras.slice(1).join(" ") : text;
+  const youCount = (rest.match(/\b(you|your|you're|yours)\b/gi) || []).length;
+  const iCount = (rest.match(/\b(i|i'm|i've|we|we're|our|us|my)\b/gi) || []).length;
   const questions = (text.match(/\?/g) || []).length;
   const unsupportedClaims = draft.claims
     .filter((c) => !opts.allowedSources.includes(c.source_id) || !draft.body.includes(c.text))

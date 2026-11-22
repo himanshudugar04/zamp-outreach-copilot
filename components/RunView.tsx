@@ -34,7 +34,7 @@ export function RunView({
     onRecordChange(next);
   };
 
-  const redraft = async (hook: Hook, attempt: number) => {
+  const redraft = async (hook: Hook, attempt: number, feedback?: string) => {
     if (!record || !result?.prospect) return;
     setBusy(true);
     setErr(null);
@@ -44,6 +44,8 @@ export function RunView({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           purpose: record.input.purpose,
+          playbookMd: record.input.playbookMd,
+          companyMd: record.input.companyMd,
           sender: record.input.sender,
           prospect: result.prospect,
           company: result.company,
@@ -52,7 +54,10 @@ export function RunView({
           lowPersonalization: hook.source_id === "role",
           note: record.input.note,
           allowedSources: Object.keys(result.sources),
+          supporting: hook.source_id === result.hook?.source_id ? result.supporting : [],
           attempt,
+          feedback: feedback || undefined,
+          previousDraft: feedback && result.draft ? { subject: record.finalSubject ?? result.draft.subject, body: record.finalBody ?? result.draft.body } : undefined,
         }),
       });
       const out = await res.json();
@@ -69,6 +74,7 @@ export function RunView({
         finalSubject: undefined,
         approval: "pending",
         regenerations: record.regenerations + 1,
+        feedbackLog: feedback ? [...(record.feedbackLog || []), feedback] : record.feedbackLog,
       });
     } catch (e: any) {
       setErr(e.message);
@@ -82,12 +88,12 @@ export function RunView({
     redraft({ source_id: s.id, usable_fact: s.judgement.usable_fact, date: s.date || "", angle: s.judgement.angle, label: s.label }, (record?.regenerations ?? 0) + 2);
   };
 
-  const pick = (c: Candidate) => input && onRerun({ purpose: input.purpose, sender: input.sender, note: input.note, linkedinUrl: c.profileUrl });
-  const successor = (companyId: number, companyName: string, title: string) =>
-    input && onRerun({ purpose: input.purpose, sender: input.sender, note: input.note, findSuccessor: { companyId, companyName, title } });
+  const carry = () => (input ? { purpose: input.purpose, purposeName: input.purposeName, playbookMd: input.playbookMd, companyMd: input.companyMd, sender: input.sender, note: input.note } : null);
+  const pick = (c: Candidate) => input && onRerun({ ...carry()!, linkedinUrl: c.profileUrl });
+  const successor = (companyId: number, companyName: string, title: string) => input && onRerun({ ...carry()!, findSuccessor: { companyId, companyName, title } });
   const continueAnyway = () => input && onRerun({ ...input, ignoreFit: true });
 
-  const playbook = input ? PLAYBOOKS[input.purpose] : undefined;
+  const playbook = input ? { name: input.purposeName || PLAYBOOKS[input.purpose]?.name || input.purpose } : undefined;
 
   return (
     <div className="grid gap-6 xl:grid-cols-[240px_minmax(0,1fr)_360px] lg:grid-cols-[220px_minmax(0,1fr)]">
@@ -135,7 +141,7 @@ export function RunView({
                 busy={busy}
                 onApprove={(s, b) => patch({ approval: "approved", finalSubject: s, finalBody: b, editDistance: editShare(result.draft!.body, b) })}
                 onSaveEdit={(s, b) => patch({ finalSubject: s, finalBody: b, editDistance: editShare(result.draft!.body, b) })}
-                onRegenerate={() => redraft(result.hook!, record!.regenerations + 2)}
+                onRegenerate={(fb) => redraft(result.hook!, record!.regenerations + 2, fb)}
                 onReject={(reason) => patch({ approval: "rejected", rejectReason: reason })}
               />
             ) : (
@@ -201,7 +207,7 @@ function Banners({ result }: { result: NonNullable<RunRecord["result"]> }) {
   if (result.flags.sensitiveSkipped)
     b.push({ tone: "rust", icon: ShieldAlert, title: "Held back sensitive signals", text: `${result.flags.sensitiveSkipped}. These are never used as an opener.` });
   if (result.flags.personaWeak) b.push({ tone: "ink", icon: Info, title: "Weak persona fit", text: result.flags.personaWeak });
-  if (result.executive) b.push({ tone: "ink", icon: Info, title: "Executive mode", text: "Senior prospect: kept under 70 words with a lighter ask." });
+  if (result.executive) b.push({ tone: "ink", icon: Info, title: "Executive mode", text: "Senior prospect: kept at the short end of the playbook's length, with a lighter ask." });
   if (!b.length) return null;
   return (
     <div className="space-y-2">

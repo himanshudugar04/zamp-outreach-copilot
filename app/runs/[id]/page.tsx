@@ -43,7 +43,7 @@ export default function RunPage({ params }: { params: { id: string } }) {
       <h1 className="mt-2 text-[22px] font-semibold tracking-tight">
         {rec.result.prospect?.name || rec.input.name || "Run"}
         <span className="ml-2 align-middle font-sans text-[13px] font-normal text-ink-3">
-          {PLAYBOOKS[rec.input.purpose].name}, {new Date(rec.createdAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+          {rec.input.purposeName || PLAYBOOKS[rec.input.purpose]?.name || rec.input.purpose}, {new Date(rec.createdAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
         </span>
       </h1>
       <div className="mt-5">

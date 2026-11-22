@@ -1,5 +1,5 @@
 import { ageInDays } from "./crustdata";
-import type { CompanyInfo, Prospect, PurposeId, Signal } from "./types";
+import type { CompanyInfo, Prospect, Signal } from "./types";
 
 const SENSITIVE_WORDS = [
   "layoff", "laid off", "lay off", "redundanc", "restructur", "job cuts", "cuts jobs", "lawsuit", "sued",
@@ -47,7 +47,7 @@ export interface RawResearch {
   personPress?: { title: string; url?: string; date?: string; snippet?: string; source?: string }[];
 }
 
-export function buildSignals(r: RawResearch, purpose: PurposeId): Signal[] {
+export function buildSignals(r: RawResearch, includeLocation: boolean, hiringTopic = "finance or operations"): Signal[] {
   const out: Signal[] = [];
   const push = (s: Omit<Signal, "id" | "keywordSensitive">) =>
     out.push({ ...s, id: "", keywordSensitive: looksSensitive(s.text) });
@@ -120,8 +120,8 @@ export function buildSignals(r: RawResearch, purpose: PurposeId): Signal[] {
     const titles = Array.from(new Set(r.jobs.map((j) => j.title))).slice(0, 4);
     push({
       type: "finops_hiring",
-      label: "Finance-ops hiring",
-      text: `${cname} posted ${r.jobs.length} finance or operations role${r.jobs.length > 1 ? "s" : ""} in the last 90 days, including ${titles.join("; ")}.`,
+      label: hiringTopic === "finance or operations" ? "Finance-ops hiring" : "Relevant hiring",
+      text: `${cname} posted ${r.jobs.length} ${hiringTopic} role${r.jobs.length > 1 ? "s" : ""} in the last 90 days, including ${titles.join("; ")}.`,
       date: newest.date,
       ageDays: ageInDays(newest.date),
       sourceUrl: newest.url,
@@ -193,7 +193,7 @@ export function buildSignals(r: RawResearch, purpose: PurposeId): Signal[] {
     });
   }
 
-  if (purpose === "event_invite" && p.location) {
+  if (includeLocation && p.location) {
     push({
       type: "location",
       label: "Location",

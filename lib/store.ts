@@ -15,6 +15,8 @@ export interface RunRecord {
   finalBody?: string;
   editDistance?: number;
   regenerations: number;
+  /** What the rep asked to change on each regenerate */
+  feedbackLog?: string[];
   reply: Reply;
   stages: Partial<Record<StageId, StageEvent>>;
 }

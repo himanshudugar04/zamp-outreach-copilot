@@ -212,7 +212,7 @@ export async function enrichPerson(
 }
 
 // ---------- signals sources ----------
-export async function financeJobs(companyId: number, keywords: string[]): Promise<Step<{ title: string; url?: string; date?: string }[]>> {
+export async function financeJobs(companyId: number, keywords: string[], excludeNonOps = true): Promise<Step<{ title: string; url?: string; date?: string }[]>> {
   const { data, credits } = await crust<any>("/job/search", {
     filters: and(
       f("company.basic_info.company_id", "=", companyId),
@@ -228,7 +228,7 @@ export async function financeJobs(companyId: number, keywords: string[]): Promis
   return {
     value: (data.job_listings || [])
       .map((j: any) => ({ title: j.job_details?.title, url: j.job_details?.url, date: j.metadata?.date_added }))
-      .filter((j: any) => j.title && !notOps.test(j.title)),
+      .filter((j: any) => j.title && (!excludeNonOps || !notOps.test(j.title))),
     credits,
   };
 }

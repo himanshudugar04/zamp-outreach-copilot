@@ -1,10 +1,12 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Loader2, Settings2 } from "lucide-react";
+import Link from "next/link";
+import { Loader2, Plus, Settings2 } from "lucide-react";
 import { RunView } from "@/components/RunView";
 import { useRunner } from "@/lib/useRunner";
 import { getSender, setSender } from "@/lib/store";
-import { PLAYBOOKS } from "@/lib/playbooks";
+import { PLAYBOOKS, ZAMP, isOfferMode, type CompanyProfile } from "@/lib/playbooks";
+import { filesForRun, getCompany, listPurposes, type PurposeEntry } from "@/lib/playbookStore";
 import { DEMOS } from "@/lib/demos";
 import type { PurposeId, RunInput, Sender } from "@/lib/types";
 
@@ -19,15 +21,23 @@ export default function Home() {
   const [showNote, setShowNote] = useState(false);
   const [sender, setS] = useState<Sender>({ name: "Himanshu", role: "Account Executive, Zamp" });
   const [showSender, setShowSender] = useState(false);
+  const [purposes, setPurposes] = useState<PurposeEntry[]>([]);
+  const [seller, setSeller] = useState<CompanyProfile>(ZAMP);
   const started = live || !!record;
 
-  useEffect(() => setS(getSender()), []);
+  useEffect(() => {
+    setS(getSender());
+    setPurposes(listPurposes());
+    setSeller(getCompany());
+  }, []);
+  const current = purposes.find((p) => p.playbook.id === purpose)?.playbook || PLAYBOOKS[purpose] || PLAYBOOKS.sales_outreach;
 
   const canRun = byUrl ? /linkedin\.com\/in\//i.test(url) : name.trim().length > 1 && company.trim().length > 1;
 
   const run = (override?: Partial<RunInput>) => {
     const input: RunInput = {
       purpose,
+      ...filesForRun(purpose),
       sender,
       note: note.trim() || undefined,
       ...(byUrl ? { linkedinUrl: url.trim() } : { name: name.trim(), company: company.trim() }),
@@ -50,21 +60,30 @@ export default function Home() {
             <h1 className="text-[22px] font-semibold leading-tight tracking-tight text-ink">Who are you writing to?</h1>
             <p className="text-[13px] text-ink-2">Name the prospect. The desk researches them, picks one true reason to write, and drafts. You approve.</p>
           </div>
-          <div role="radiogroup" aria-label="Purpose" className="flex gap-1 rounded-xl bg-paper p-1">
-            {(Object.keys(PLAYBOOKS) as PurposeId[]).map((id) => (
-              <button
-                type="button"
-                role="radio"
-                aria-checked={purpose === id}
-                key={id}
-                onClick={() => setPurpose(id)}
-                className={`rounded-lg px-3 py-1.5 text-left ${purpose === id ? "bg-sheet text-ink shadow-[0_1px_2px_rgba(23,23,23,0.08)] ring-1 ring-rule" : "text-ink-2 hover:text-ink"}`}
-              >
-                <span className="block text-[13px] font-medium">{PLAYBOOKS[id].name}</span>
-                <span className={`block text-2xs ${purpose === id ? "text-sky" : "text-ink-3"}`}>{PLAYBOOKS[id].persona}</span>
-              </button>
-            ))}
-          </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center gap-1.5" role="radiogroup" aria-label="Purpose">
+          <span className="mr-1 text-[12px] text-ink-3">Purpose</span>
+          {purposes.map(({ playbook: p, custom }) => (
+            <button
+              type="button"
+              role="radio"
+              aria-checked={purpose === p.id}
+              key={p.id}
+              onClick={() => setPurpose(p.id)}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[13px] ${purpose === p.id ? "border-ink bg-ink text-white" : "border-rule bg-sheet text-ink-2 hover:border-ink-3 hover:text-ink"}`}
+            >
+              {p.name}
+              {custom && <span className={`rounded px-1 text-[10px] ${purpose === p.id ? "bg-white/20" : "bg-violet/10 text-violet"}`}>yours</span>}
+            </button>
+          ))}
+          <Link href="/playbooks#add" className="inline-flex items-center gap-1 rounded-full border border-dashed border-ink-3 px-3 py-1 text-[13px] text-ink-2 hover:border-ink hover:text-ink">
+            <Plus size={13} /> Add a purpose
+          </Link>
+          <span className="ml-auto text-[12px] text-ink-3">
+            Selling as <span className="text-ink-2">{seller.name}</span>, {seller.products.length} product suites.{" "}
+            <Link href="/playbooks" className="text-sky hover:underline">Change</Link>
+          </span>
         </div>
 
         <div className="mt-4 flex flex-col gap-2 md:flex-row">
@@ -162,38 +181,45 @@ export default function Home() {
         {started ? (
           <RunView record={record} stages={stages} live={live} onRecordChange={setRecord} onRerun={(i) => start(i)} />
         ) : (
-          <EmptyState purpose={purpose} />
+          <EmptyState playbook={current} seller={seller} />
         )}
       </div>
     </div>
   );
 }
 
-function EmptyState({ purpose }: { purpose: PurposeId }) {
-  const p = PLAYBOOKS[purpose];
+function EmptyState({ playbook: p, seller }: { playbook: (typeof PLAYBOOKS)[string]; seller: CompanyProfile }) {
+  const offer = isOfferMode(p);
+  const parts = [
+    { t: "Who we are", d: `One line on you and ${seller.name}.` },
+    { t: "Why you, why now", d: "Their freshest signal: a post, interview, news, hiring or funding." },
+    offer
+      ? { t: "The offer", d: "What you are inviting them to, using only the playbook's details." }
+      : { t: "What fits", d: `${seller.name} has ${seller.products.length} product suites. The draft names the one or two that match the signal.` },
+    { t: "The ask", d: p.ctaExamples[0] || "A short, low-pressure question." },
+  ];
   return (
     <div className="grid gap-6 md:grid-cols-[1.2fr_1fr]">
       <div className="rounded-xl border border-rule bg-sheet p-6">
         <h2 className="text-[16px] font-semibold">What happens when you press research</h2>
         <ol className="mt-3 space-y-2.5 text-[14px] text-ink-2">
           <li><span className="font-medium text-ink">It confirms it has the right person.</span> If they left the company or the name matches two people, it stops and asks you.</li>
-          <li><span className="font-medium text-ink">It reads everything public and recent.</span> Profile, company growth and funding, finance-ops hiring, their LinkedIn posts and the news.</li>
-          <li><span className="font-medium text-ink">It ranks every signal and shows its working.</span> Sensitive news like layoffs is never used as an opener.</li>
-          <li><span className="font-medium text-ink">It writes a short draft with every fact footnoted.</span> Nothing is sent. You approve, edit, regenerate or reject.</li>
+          <li><span className="font-medium text-ink">It checks six kinds of signal.</span> Their LinkedIn activity, company news, job postings, funding, interviews and talks, and recent press.</li>
+          <li><span className="font-medium text-ink">It ranks every signal and shows its working.</span> Sensitive news like layoffs is never used.</li>
+          <li><span className="font-medium text-ink">It drafts with every fact footnoted.</span> Nothing is sent. You approve, edit, ask for changes or reject.</li>
         </ol>
       </div>
       <div className="rounded-xl border border-rule bg-sheet p-6">
-        <h2 className="text-[13px] font-semibold">{p.name} playbook</h2>
-        <p className="mt-1 text-[13px] text-ink-2">{p.goal}</p>
-        <p className="mt-3 text-2xs text-ink-3">Strong signals</p>
-        <ul className="mt-1 list-disc space-y-0.5 pl-4 text-[13px] text-ink-2">
-          {p.strongSignals.slice(0, 4).map((s) => <li key={s}>{s}</li>)}
-        </ul>
-        {p.event && (
-          <p className="mt-3 rounded-md bg-paper p-2.5 text-[12px] text-ink-2">
-            <span className="font-medium text-ink">{p.event.name}</span>, {p.event.city}, {p.event.date}. Sample event for this demo.
-          </p>
-        )}
+        <h2 className="text-[13px] font-semibold">How a {p.name.toLowerCase()} email is built</h2>
+        <ol className="mt-3 space-y-3">
+          {parts.map((x, i) => (
+            <li key={x.t} className="flex gap-3">
+              <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-sky-soft text-[11px] font-semibold text-sky-deep">{i + 1}</span>
+              <span className="text-[13px] text-ink-2"><span className="font-medium text-ink">{x.t}.</span> {x.d}</span>
+            </li>
+          ))}
+        </ol>
+        <p className="mt-4 border-t border-rule pt-3 text-[12px] text-ink-3">{p.goal}</p>
       </div>
     </div>
   );
