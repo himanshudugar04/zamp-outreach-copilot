@@ -34,9 +34,6 @@ export function Rail() {
           </Link>
         );
       })}
-      <div className="mt-auto hidden rounded-lg bg-white/5 p-3 text-2xs leading-relaxed text-white/55 md:block">
-        Research by Crustdata. Drafts by OpenAI. Nothing sends without your approval.
-      </div>
     </nav>
   );
 }

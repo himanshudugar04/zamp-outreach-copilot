@@ -108,7 +108,8 @@ export default function Dashboard() {
                 <th className="px-4 py-2.5 font-normal">Prospect</th>
                 <th className="px-3 py-2.5 font-normal">Purpose</th>
                 <th className="px-3 py-2.5 font-normal">Status</th>
-                <th className="px-3 py-2.5 font-normal">Hook or reason</th>
+                <th className="px-3 py-2.5 font-normal">Why, or why it stopped</th>
+                <th className="px-3 py-2.5 font-normal">Draft</th>
                 <th className="px-3 py-2.5 text-right font-normal">Edited</th>
                 <th className="px-3 py-2.5 font-normal">Reply</th>
                 <th className="px-4 py-2.5 text-right font-normal">When</th>
@@ -128,6 +129,16 @@ export default function Dashboard() {
                     <td className={`px-3 py-2.5 font-medium ${st.cls}`}>{st.label}</td>
                     <td className="max-w-[280px] px-3 py-2.5 text-ink-2">
                       <span className="line-clamp-2">{r.result.edge ? r.result.edge.title : r.result.hook ? `${r.result.hook.label}: ${r.result.hook.usable_fact}` : r.result.error}</span>
+                    </td>
+                    <td className="max-w-[300px] px-3 py-2.5">
+                      {r.result.draft?.status === "ok" ? (
+                        <Link href={`/runs/${r.id}`} className="block hover:text-sky">
+                          <span className="block truncate font-medium text-ink">{r.finalSubject || r.result.draft.subject}</span>
+                          <span className="line-clamp-1 text-2xs text-ink-3">{preview(r.finalBody || r.result.draft.body)}</span>
+                        </Link>
+                      ) : (
+                        <span className="text-2xs text-ink-3">No draft</span>
+                      )}
                     </td>
                     <td className="num px-3 py-2.5 text-right text-ink-2">{r.editDistance !== undefined ? `${r.editDistance}%` : ""}</td>
                     <td className="px-3 py-2.5">
@@ -161,4 +172,10 @@ function Stat({ k, v, hint }: { k: string; v: string | number; hint?: string }) 
       <dd className="num mt-0.5 text-[20px] font-medium text-ink">{v}</dd>
     </div>
   );
+}
+
+/** First real sentence of the email, skipping the greeting. */
+function preview(body: string) {
+  const lines = body.split("\n").map((l) => l.trim()).filter(Boolean);
+  return (lines[1] || lines[0] || "").slice(0, 160);
 }

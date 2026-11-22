@@ -16,6 +16,20 @@ export const STAGES: { id: StageId; label: string; group: "identity" | "research
 
 const GROUP_LABEL = { identity: "Identity", research: "Research, in parallel", judgment: "Judgment" };
 
+/** Plain-language labels for the rep-facing live view. */
+const SIMPLE_LABEL: Record<StageId, string> = {
+  resolve: "Finding the right person",
+  person: "Reading their profile",
+  company: "Company news and funding",
+  hiring: "Job postings",
+  posts: "LinkedIn activity",
+  news: "Press, interviews and talks",
+  analyze: "Picking the strongest reason to write",
+  draft: "Writing the draft",
+  check: "Checking every fact against its source",
+};
+const SIMPLE_GROUP = { identity: "Who they are", research: "What's happening at their company, checked together", judgment: "Writing" };
+
 export type StageMap = Partial<Record<StageId, StageEvent>>;
 
 function Icon({ s }: { s?: StageEvent }) {
@@ -28,19 +42,19 @@ function Icon({ s }: { s?: StageEvent }) {
   return <Circle size={9} className="mx-[3px] text-rule" fill="currentColor" aria-label="Waiting" />;
 }
 
-export function StageLog({ stages, live }: { stages: StageMap; live: boolean }) {
+export function StageLog({ stages, live, simple = false }: { stages: StageMap; live: boolean; simple?: boolean }) {
   const groups = ["identity", "research", "judgment"] as const;
   const totalCredits = Object.values(stages).reduce((n, s) => n + (s?.credits ?? 0), 0);
   return (
     <section aria-label="Run log" aria-live="polite">
-      <div className="mb-3 flex items-baseline justify-between">
+      {!simple && <div className="mb-3 flex items-baseline justify-between">
         <h2 className="text-[13px] font-semibold">Run log</h2>
         <span className="num text-2xs text-ink-3">{totalCredits ? `${Math.round(totalCredits * 100) / 100} credits` : live ? "starting" : ""}</span>
-      </div>
+      </div>}
       <ol className="space-y-4">
         {groups.map((g) => (
           <li key={g}>
-            <p className="mb-1.5 text-2xs text-ink-3">{GROUP_LABEL[g]}</p>
+            <p className={`mb-1.5 text-ink-3 ${simple ? "text-[12px]" : "text-2xs"}`}>{simple ? SIMPLE_GROUP[g] : GROUP_LABEL[g]}</p>
             <ol className="relative ml-[7px] border-l border-rule">
               {STAGES.filter((x) => x.group === g).map((x) => {
                 const s = stages[x.id];
@@ -51,15 +65,15 @@ export function StageLog({ stages, live }: { stages: StageMap; live: boolean }) 
                       <Icon s={s} />
                     </span>
                     <div className="flex items-baseline justify-between gap-2">
-                      <span className={`text-[13px] ${muted ? "text-ink-3" : "text-ink"}`}>{x.label}</span>
-                      {s?.ms !== undefined && s.status !== "skipped" && (
+                      <span className={`${simple ? "text-[14px]" : "text-[13px]"} ${muted ? "text-ink-3" : "text-ink"}`}>{simple ? SIMPLE_LABEL[x.id] : x.label}</span>
+                      {!simple && s?.ms !== undefined && s.status !== "skipped" && (
                         <span className="num shrink-0 text-2xs text-ink-3">{s.ms < 1000 ? `${s.ms} ms` : `${(s.ms / 1000).toFixed(1)} s`}</span>
                       )}
                     </div>
                     {s?.detail && (
-                      <p className={`text-2xs ${s.status === "error" ? "text-brick" : s.status === "warn" ? "text-rust" : "text-ink-2"}`}>
+                      <p className={`${simple ? "text-[13px]" : "text-2xs"} ${s.status === "error" ? "text-brick" : s.status === "warn" ? "text-rust" : "text-ink-2"}`}>
                         {s.detail}
-                        {s.credits ? <span className="num text-ink-3">, {s.credits} cr</span> : null}
+                        {!simple && s.credits ? <span className="num text-ink-3">, {s.credits} cr</span> : null}
                       </p>
                     )}
                   </li>

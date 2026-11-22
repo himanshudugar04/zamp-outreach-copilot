@@ -138,7 +138,7 @@ export function RunView({
             </ol>
           </section>
         )}
-        {(result || live) && (
+        {result && (
           <div>
             <button onClick={() => setShowLog((v) => !v)} aria-expanded={showLog} className="inline-flex items-center gap-1 text-[13px] text-ink-3 hover:text-ink">
               How this was researched <ChevronDown size={14} className={showLog ? "rotate-180" : ""} />
@@ -230,18 +230,17 @@ const FRIENDLY: Record<string, string> = {
 };
 
 function Progress({ stages }: { stages: StageMap }) {
-  const done = STAGES.filter((s) => stages[s.id] && stages[s.id]!.status !== "running").length;
   const running = STAGES.find((s) => stages[s.id]?.status === "running");
-  const label = running ? FRIENDLY[running.id] : done === 0 ? "Starting" : "Finishing up";
+  const label = running ? FRIENDLY[running.id] : "Starting";
   return (
-    <div className="rounded-xl border border-rule bg-sheet px-6 py-8" aria-live="polite">
+    <div className="rounded-xl border border-rule bg-sheet px-6 py-6">
       <p className="flex items-center gap-2 text-[17px] font-semibold text-ink">
         <Loader2 size={18} className="spin text-sky" /> {label}…
       </p>
-      <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-paper">
-        <div className="h-full rounded-full bg-sky transition-[width] duration-500" style={{ width: `${Math.max(6, (done / STAGES.length) * 100)}%` }} />
+      <p className="mt-1 text-[14px] text-ink-2">The draft appears only if there is something true and specific to say.</p>
+      <div className="mt-5 border-t border-rule pt-5">
+        <StageLog stages={stages} live simple />
       </div>
-      <p className="mt-3 text-[14px] text-ink-2">The draft appears only if there is something true and specific to say.</p>
     </div>
   );
 }
