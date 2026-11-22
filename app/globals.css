@@ -1,0 +1,15 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { color-scheme: light; }
+html, body { background: #F4F6FA; color: #171717; }
+body { -webkit-font-smoothing: antialiased; letter-spacing: -0.005em; }
+.num { font-variant-numeric: tabular-nums; }
+:focus-visible { outline: 2px solid #3557D6; outline-offset: 2px; border-radius: 6px; }
+.cite { background: linear-gradient(transparent 60%, #DCE6FF 60%); border-radius: 2px; }
+.cite:hover, .cite[data-active="true"] { background: #DCE6FF; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.spin { animation: spin 0.9s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+::selection { background: #DCE6FF; }
