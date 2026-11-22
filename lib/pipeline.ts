@@ -9,7 +9,7 @@ import {
   identifyCompany,
   postsBy,
   resolvePerson,
-  webNews,
+  webNews, personWeb,
 } from "./research";
 import { buildSignals, recencyPoints, type RawResearch } from "./signals";
 import type {
@@ -204,9 +204,17 @@ export async function runPipeline(input: RunInput, emit: Emit): Promise<RunResul
       }).catch(() => ({ person: [], company: [] })),
       stage("news", async () => {
         const q = person.companyName || (companyRef as any)?.name || prospect.name;
-        const w = await webNews(`"${q}"`, q);
-        return { ...w, detail: `${w.value.length} recent articles` };
-      }).catch(() => []),
+        const [co, pr] = await Promise.all([
+          webNews(`"${q}"`, q),
+          // Executive interviews, podcasts, talks and press that name the person
+          personWeb(prospect.name, q).catch(() => ({ value: [], credits: 0 })),
+        ]);
+        return {
+          value: { company: co.value, person: pr.value },
+          credits: co.credits + pr.credits,
+          detail: `${co.value.length} company articles, ${pr.value.length} mentioning ${prospect.firstName} (posts, talks, press)`,
+        };
+      }).catch(() => ({ company: [], person: [] })),
     ]);
 
     const company: CompanyInfo | undefined = companyOut?.info || (person.companyName ? { id: companyId || 0, name: person.companyName } : undefined);
@@ -219,7 +227,8 @@ export async function runPipeline(input: RunInput, emit: Emit): Promise<RunResul
       jobs: (jobs as any[]) || [],
       personPosts: (posts as any)?.person || [],
       companyPosts: (posts as any)?.company || [],
-      webNews: (news as any[]) || [],
+      webNews: (news as any)?.company || [],
+      personPress: (news as any)?.person || [],
     };
     const signals = buildSignals(raw, input.purpose);
     for (const s of signals) result.sources[s.id] = { label: `${s.label}, ${s.sourceName}`, url: s.sourceUrl, date: s.date };

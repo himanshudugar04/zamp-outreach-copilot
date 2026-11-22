@@ -121,7 +121,8 @@ export type SignalType =
   | "person_post"
   | "company_post"
   | "location"
-  | "role";
+  | "role"
+  | "person_press";
 
 export interface Signal {
   id: string;

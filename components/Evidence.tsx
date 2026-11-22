@@ -15,6 +15,7 @@ const TYPE_STYLE: Record<SignalType, { cls: string; icon: any }> = {
   new_in_role: { cls: "bg-teal-soft text-teal", icon: UserRound },
   role: { cls: "bg-paper text-ink-2", icon: UserRound },
   location: { cls: "bg-paper text-ink-2", icon: MapPin },
+  person_press: { cls: "bg-brand-soft text-brand", icon: Newspaper },
 };
 import type { CompanyInfo, Prospect, RunResult, ScoredSignal } from "@/lib/types";
 import { fmtDate, money, prettyRound } from "@/lib/signals";

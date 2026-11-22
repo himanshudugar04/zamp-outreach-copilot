@@ -8,7 +8,7 @@ export const STAGES: { id: StageId; label: string; group: "identity" | "research
   { id: "company", label: "Company profile", group: "research" },
   { id: "hiring", label: "Finance-ops hiring", group: "research" },
   { id: "posts", label: "LinkedIn posts", group: "research" },
-  { id: "news", label: "Recent news", group: "research" },
+  { id: "news", label: "News, press and interviews", group: "research" },
   { id: "analyze", label: "Judge every signal", group: "judgment" },
   { id: "draft", label: "Write the draft", group: "judgment" },
   { id: "check", label: "Quality check", group: "judgment" },

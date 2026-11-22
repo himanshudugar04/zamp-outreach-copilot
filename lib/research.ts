@@ -265,11 +265,11 @@ function parseNewsDate(meta?: string): string | undefined {
   return Number.isNaN(t) ? undefined : new Date(t).toISOString().slice(0, 10);
 }
 
-export async function webNews(query: string, mustContain?: string) {
+export async function webNews(query: string, mustContain?: string, sources: string[] = ["news"]) {
   const { data, credits } = await crust<any>("/web/search/live", {
     query,
-    sources: ["news"],
-    start_date: Math.floor((Date.now() - 150 * 864e5) / 1000),
+    sources,
+    start_date: Math.floor((Date.now() - 365 * 864e5) / 1000),
   });
   return {
     value: (data.results || [])
@@ -284,4 +284,42 @@ export async function webNews(query: string, mustContain?: string) {
     })),
     credits,
   };
+}
+
+const PROFILE_SITES = /linkedin\.com\/in\/|zoominfo|rocketreach|apollo\.io|signalhire|contactout|theorg\.com|crunchbase\.com\/person|lusha|clay\.com|wiza|leadiq/i;
+
+/** Public web mentions of the person: their LinkedIn posts, podcasts, interviews, talks, press. Profile directories are dropped. */
+export async function personWeb(name: string, company: string) {
+  const { data, credits } = await crust<any>("/web/search/live", { query: `"${name}" ${company}`, sources: ["web"] });
+  const nm = name.toLowerCase();
+  const value = (data.results || [])
+    .filter((r: any) => !PROFILE_SITES.test(String(r.url || "")))
+    .filter((r: any) => {
+      const t = String(r.title || "").toLowerCase().trim();
+      if (!t.includes(nm)) return false;
+      if (/profiles|how to reach|pay, kpis|move signals|contact info|email|phone number|net worth|biography/.test(t)) return false; // people-directory pages // full name in the headline, not a namesake in the snippet
+      if (t.startsWith(nm + "'s post")) return true; // their own LinkedIn post
+      return !t.startsWith(nm); // "Name | Speaker", "Name - CFO at X", "Name: Portfolio" are bio pages
+    })
+    .filter((r: any, i: number, arr: any[]) => arr.findIndex((x: any) => x.title === r.title) === i)
+    .slice(0, 5)
+    .map((r: any) => ({
+      title: String(r.title || "").replace(/ \| LinkedIn$/, ""),
+      url: r.url,
+      snippet: r.snippet,
+      date: snippetDate(r),
+      source: /'s Post/i.test(r.title || "") ? "LinkedIn post" : "Web",
+    }));
+  return { value, credits };
+}
+
+function snippetDate(r: any): string | undefined {
+  const direct = parseNewsDate(r.date || r.metadata);
+  if (direct) return direct;
+  const sn = String(r.snippet || "");
+  const abs = sn.match(/\b(\d{1,2} [A-Z][a-z]{2,8} \d{4}|[A-Z][a-z]{2,8} \d{1,2}, \d{4})\b/);
+  if (abs) return parseNewsDate(abs[1]);
+  const li = sn.match(/\b(\d+)(d|w|mo|yr|y)\b/);
+  if (li) { const n = +li[1]; const d = li[2] === "d" ? n : li[2] === "w" ? n * 7 : li[2] === "mo" ? n * 30 : n * 365; return new Date(Date.now() - d * 864e5).toISOString().slice(0, 10); }
+  return undefined;
 }

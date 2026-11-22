@@ -44,6 +44,7 @@ export interface RawResearch {
   personPosts: { text: string; url?: string; date?: string; postType?: string; reactions?: number }[];
   companyPosts: { text: string; url?: string; date?: string }[];
   webNews: { title: string; url?: string; date?: string; snippet?: string; source?: string }[];
+  personPress?: { title: string; url?: string; date?: string; snippet?: string; source?: string }[];
 }
 
 export function buildSignals(r: RawResearch, purpose: PurposeId): Signal[] {
@@ -152,6 +153,19 @@ export function buildSignals(r: RawResearch, purpose: PurposeId): Signal[] {
       ageDays: ageInDays(n.date),
       sourceUrl: n.url,
       sourceName: n.src,
+    });
+  }
+
+  // Press, interviews, podcasts and talks that name the person
+  for (const a of (r.personPress || []).slice(0, 3)) {
+    push({
+      type: "person_press",
+      label: a.source === "LinkedIn post" ? "Their LinkedIn post (web)" : /podcast|youtube|spotify/i.test(a.title + (a.snippet || "") + a.url) ? "Podcast" : /interview|keynote|panel|summit|conference/i.test(a.title + (a.snippet || "")) ? "Interview or talk" : "Press mention",
+      text: clip(`${a.title}${a.snippet ? ". " + a.snippet : ""}`, 300),
+      date: a.date,
+      ageDays: ageInDays(a.date),
+      sourceUrl: a.url,
+      sourceName: a.source || "Web",
     });
   }
 
