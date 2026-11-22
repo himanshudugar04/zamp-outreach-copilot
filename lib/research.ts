@@ -204,7 +204,7 @@ export async function enrichPerson(
     startDate: role.start_date,
     profileUrl: pd.social_handles?.professional_network_identifier?.profile_url || profileUrl,
     photo: bp.profile_picture_permalink,
-    email: pd.contact?.business_emails?.[0]?.email,
+    ...pickEmail(pd.contact?.business_emails, role.name),
     pastRoles: past.slice(0, 4).map((r) => ({ title: r.title, company: r.name, start: r.start_date, end: r.end_date })),
     personId: pd.crustdata_person_id,
   };
@@ -322,4 +322,13 @@ function snippetDate(r: any): string | undefined {
   const li = sn.match(/\b(\d+)(d|w|mo|yr|y)\b/);
   if (li) { const n = +li[1]; const d = li[2] === "d" ? n : li[2] === "w" ? n * 7 : li[2] === "mo" ? n * 30 : n * 365; return new Date(Date.now() - d * 864e5).toISOString().slice(0, 10); }
   return undefined;
+}
+
+/** Crustdata can return work emails from past employers. Only keep one whose domain matches the current company. */
+function pickEmail(list: any[] | undefined, company?: string): { email?: string; staleEmail?: string } {
+  const emails: string[] = (list || []).map((e: any) => e?.email).filter(Boolean);
+  if (!emails.length) return {};
+  const key = String(company || "").toLowerCase().replace(/\b(inc|ltd|llc|limited|technologies|labs|corp|co)\b/g, "").replace(/[^a-z0-9]/g, "");
+  const match = key.length >= 3 && emails.find((e) => e.split("@")[1]?.toLowerCase().replace(/[^a-z0-9]/g, "").includes(key.slice(0, Math.min(key.length, 8))));
+  return match ? { email: match } : { staleEmail: emails[0] };
 }

@@ -93,6 +93,8 @@ export interface Prospect {
   profileUrl?: string;
   photo?: string;
   email?: string;
+  /** A work email that belongs to a past employer: shown as a warning, never as the To address */
+  staleEmail?: string;
   pastRoles: { title: string; company: string; start?: string; end?: string }[];
   personId?: number;
 }

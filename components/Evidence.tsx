@@ -64,7 +64,7 @@ export function ProspectCard({ p, c }: { p?: Prospect; c?: CompanyInfo }) {
         <Fact k="Company" v={c?.name || "unknown"} />
         <Fact k="People" v={c?.headcount ? `${c.headcount.toLocaleString("en-US")}${c.headcountQoq !== undefined ? ` (${c.headcountQoq > 0 ? "+" : ""}${c.headcountQoq.toFixed(1)}% qoq)` : ""}` : "unknown"} />
         <Fact k="Last round" v={c?.lastRoundDate ? `${prettyRound(c.lastRound)}${c.lastRoundUsd ? `, ${money(c.lastRoundUsd)}` : ""}, ${fmtDate(c.lastRoundDate)}` : "none found"} />
-        <Fact k="Work email" v={p.email ? "found" : "not found"} />
+        <Fact k="Work email" v={p.email ? "found" : p.staleEmail ? `only an old one (${p.staleEmail.split("@")[1]})` : "not found"} />
       </dl>
     </div>
   );
