@@ -199,7 +199,7 @@ function Banners({ result }: { result: NonNullable<RunRecord["result"]> }) {
   if (result.flags.lowPersonalization)
     b.push({ tone: "rust", icon: AlertTriangle, title: "No timely signal found", text: "This draft only uses their role and company. It is honest but generic. Consider waiting for a real trigger before sending." });
   if (result.flags.sensitiveSkipped)
-    b.push({ tone: "rust", icon: ShieldAlert, title: "Skipped a sensitive signal", text: `${result.flags.sensitiveSkipped}. The draft uses the next-best signal instead.` });
+    b.push({ tone: "rust", icon: ShieldAlert, title: "Held back sensitive signals", text: `${result.flags.sensitiveSkipped}. These are never used as an opener.` });
   if (result.flags.personaWeak) b.push({ tone: "ink", icon: Info, title: "Weak persona fit", text: result.flags.personaWeak });
   if (result.executive) b.push({ tone: "ink", icon: Info, title: "Executive mode", text: "Senior prospect: kept under 70 words with a lighter ask." });
   if (!b.length) return null;

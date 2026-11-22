@@ -292,10 +292,13 @@ export async function runPipeline(input: RunInput, emit: Emit): Promise<RunResul
     }
     if (analysis.persona_fit.verdict === "weak") result.flags.personaWeak = analysis.persona_fit.reason;
 
-    const topOverall = judged[0];
     const best = judged.find((s) => !s.excluded);
-    if (topOverall && topOverall.excluded === "sensitive" && topOverall.judgement && topOverall.judgement.relevance >= 3) {
-      result.flags.sensitiveSkipped = `${topOverall.label}: ${topOverall.judgement.sensitive_reason || "sensitive topic"}`;
+    const held = judged.filter((s) => s.excluded === "sensitive");
+    if (held.length) {
+      result.flags.sensitiveSkipped = held
+        .slice(0, 3)
+        .map((s) => `${s.label} (${s.judgement?.sensitive_reason || "sensitive topic"})`)
+        .join("; ");
     }
 
     let hook: Hook;
