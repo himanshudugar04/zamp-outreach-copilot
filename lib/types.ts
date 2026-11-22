@@ -160,7 +160,7 @@ export interface ScoredSignal extends Signal {
   judgement?: SignalJudgement;
   score: number;
   recency: number;
-  excluded?: "sensitive" | "injection" | "weak";
+  excluded?: "sensitive" | "injection" | "weak" | "stale" | "context";
 }
 
 export interface Analysis {

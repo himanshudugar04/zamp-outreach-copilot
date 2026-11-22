@@ -150,16 +150,31 @@ export async function resolvePerson(name: string, company: { id: number; name: s
   return { value: { kind: "not_found", candidates: all }, credits };
 }
 
-export async function findSuccessors(companyId: number, title: string): Promise<Step<Candidate[]>> {
-  const res = await personSearch(
-    and(
-      f("experience.employment_details.current.company_id", "=", companyId),
-      f("experience.employment_details.current.title", "(.)", title),
-      f("experience.employment_details.current.start_date", "=>", daysAgoISO(540))
-    ),
-    5
-  );
-  return { value: dedupe((res.data.profiles || []).map((p) => toCandidate(p, companyId))), credits: res.credits };
+/**
+ * Who does this job now. Tries, in order: someone with a similar title who joined in the last 18 months,
+ * anyone currently in a similar role, then the company's current finance leaders.
+ */
+export async function findSuccessors(companyId: number, title: string): Promise<Step<Candidate[]> & { scope: "recent" | "current" | "finance" }> {
+  const core = title.replace(/\b(senior|sr\.?|junior|director|vp|vice president|head of|manager|lead|principal|associate|assistant|global|regional|of|and|&|,)\b/gi, " ").replace(/\s+/g, " ").trim() || title;
+  let credits = 0;
+  const tries: { scope: "recent" | "current" | "finance"; filter: any }[] = [
+    { scope: "recent", filter: and(f("experience.employment_details.current.company_id", "=", companyId), f("experience.employment_details.current.title", "(.)", title), f("experience.employment_details.current.start_date", "=>", daysAgoISO(540))) },
+    { scope: "current", filter: and(f("experience.employment_details.current.company_id", "=", companyId), f("experience.employment_details.current.title", "(.)", core)) },
+    {
+      scope: "finance",
+      filter: and(
+        f("experience.employment_details.current.company_id", "=", companyId),
+        or(...["Chief Financial Officer", "VP Finance", "Finance Director", "Head of Finance", "Controller", "Head of FP&A"].map((t) => f("experience.employment_details.current.title", "(.)", t)))
+      ),
+    },
+  ];
+  for (const t of tries) {
+    const res = await personSearch(t.filter, 5);
+    credits += res.credits;
+    const c = dedupe((res.data.profiles || []).map((p) => toCandidate(p, companyId)));
+    if (c.length) return { value: c, credits, scope: t.scope };
+  }
+  return { value: [], credits, scope: "finance" };
 }
 
 function dedupe(c: Candidate[]) {

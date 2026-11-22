@@ -30,6 +30,21 @@ import type {
 type Emit = (e: StageEvent) => void;
 const HOOK_THRESHOLD = 6;
 
+/** A signal older than this can still be shown, but is never the reason to write. */
+const MAX_HOOK_AGE_DAYS: Partial<Record<string, number>> = {
+  person_post: 365,
+  company_post: 270,
+  person_press: 365,
+  news: 180,
+  finops_hiring: 120,
+  hiring_growth: 180,
+  funding: 400,
+  new_in_role: 200,
+  headcount_growth: 365,
+};
+/** Context facts: may support an email, never lead it. */
+const CONTEXT_ONLY = new Set(["location", "role"]);
+
 function isExecutive(seniority?: string, title?: string) {
   const s = `${seniority || ""} ${title || ""}`.toLowerCase();
   return /\b(cxo|chief|cfo|ceo|coo|vice president|vp|svp|evp|president|founder)\b/.test(s);
@@ -77,7 +92,7 @@ export async function runPipeline(input: RunInput, emit: Emit): Promise<RunResul
       let credits = 0;
       if (input.findSuccessor) {
         const s = await findSuccessors(input.findSuccessor.companyId, input.findSuccessor.title);
-        return { value: { edgeSuccessors: s.value }, credits: s.credits, detail: `${s.value.length} possible successor(s)` };
+        return { value: { edgeSuccessors: s.value, successorScope: s.scope }, credits: s.credits, detail: `${s.value.length} possible successor(s)` };
       }
       if (input.company && !profileUrl) {
         const co = await identifyCompany(input.company);
@@ -103,12 +118,19 @@ export async function runPipeline(input: RunInput, emit: Emit): Promise<RunResul
     if (rv.edgeSuccessors) {
       skip(later);
       const c = rv.edgeSuccessors;
+      const co = input.findSuccessor!.companyName;
+      const msg =
+        rv.successorScope === "recent"
+          ? "These people joined in a similar role in the last 18 months. Pick the right person to write to."
+          : rv.successorScope === "current"
+            ? `Nobody new joined in this role in the last 18 months, so these are the people doing similar work at ${co} today.`
+            : `Nobody holds a similar title at ${co}, so these are its current finance leaders.`;
       return finish({
         ...result,
         status: "needs_input",
         edge: c.length
-          ? { kind: "successors", title: `Who now holds this role at ${input.findSuccessor!.companyName}`, message: "Pick the right person to write to.", candidates: c }
-          : { kind: "not_found", title: "No successor found", message: `Nobody with a similar title joined ${input.findSuccessor!.companyName} in the last 18 months.` },
+          ? { kind: "successors", title: rv.successorScope === "recent" ? `Who now holds this role at ${co}` : `Who to write to at ${co} instead`, message: msg, candidates: c }
+          : { kind: "not_found", title: `No one to suggest at ${co}`, message: `Crustdata has no current finance leaders listed at ${co}. Try a name you know, or a LinkedIn URL.` },
       });
     }
     if (rv.suppressed) {
@@ -287,7 +309,17 @@ export async function runPipeline(input: RunInput, emit: Emit): Promise<RunResul
         judgement: j ? { ...j, sensitive } : undefined,
         recency,
         score,
-        excluded: sensitive ? "sensitive" : j?.injection_suspected ? "injection" : !j || !j.usable_fact || score < HOOK_THRESHOLD ? "weak" : undefined,
+        excluded: sensitive
+          ? "sensitive"
+          : j?.injection_suspected
+            ? "injection"
+            : s.ageDays !== null && (MAX_HOOK_AGE_DAYS[s.type] ?? 9999) < s.ageDays
+              ? "stale"
+              : CONTEXT_ONLY.has(s.type)
+                ? "context"
+                : !j || !j.usable_fact || score < HOOK_THRESHOLD
+                  ? "weak"
+                  : undefined,
       };
     });
     judged.sort((a, b) => b.score - a.score);
@@ -334,9 +366,10 @@ export async function runPipeline(input: RunInput, emit: Emit): Promise<RunResul
       };
       result.sources["role"] = { label: "Role and company, Profile", url: prospect.profileUrl };
     }
+    result.sources["prospect"] = { label: "Their profile", url: prospect.profileUrl };
     result.hook = hook;
     const supporting = judged
-      .filter((s) => !s.excluded && s.id !== hook.source_id && s.judgement?.usable_fact && (s.judgement?.relevance ?? 0) >= 3)
+      .filter((s) => (!s.excluded || s.excluded === "context") && s.id !== hook.source_id && s.judgement?.usable_fact && (s.judgement?.relevance ?? 0) >= 3)
       .slice(0, 2)
       .map((s) => ({ source_id: s.id, usable_fact: s.judgement!.usable_fact }));
     result.supporting = supporting;
@@ -424,10 +457,13 @@ export async function writeDraft(w: WriteInput): Promise<{ draft: Draft; quality
       products: seller.products.map((x) => ({ id: x.id, name: x.name, does: x.does, fits_when: x.fitsWhen })),
       proof_points: seller.proofPoints.map((x) => ({ id: x.id, text: x.text })),
       never_say: seller.neverSay,
+      context: seller.extra,
     },
     purpose: {
       name: p.name,
       goal: p.goal,
+      persona: p.persona,
+      structure: p.structure,
       offer: p.offer,
       details: p.details,
       cta_examples: p.ctaExamples,
@@ -435,10 +471,11 @@ export async function writeDraft(w: WriteInput): Promise<{ draft: Draft; quality
       length: range,
       guidance: p.guidance,
       never_say: p.neverSay,
-      extra: [p.extra, seller.extra].filter(Boolean).join("\n"),
+      extra: p.extra,
     },
     sender: w.sender,
-    prospect: { first_name: w.prospect.firstName, title: w.prospect.title, company: w.company?.name || "", executive: w.executive },
+    prospect: { first_name: w.prospect.firstName, title: w.prospect.title, seniority: w.prospect.seniority || "", company: w.company?.name || "", executive: w.executive },
+    today: new Date().toISOString().slice(0, 10),
     hook: { source_id: w.hook.source_id, usable_fact: w.hook.usable_fact, date: w.hook.date, angle: w.hook.angle },
     supporting: w.supporting || [],
     low_personalization: w.lowPersonalization,
@@ -447,7 +484,7 @@ export async function writeDraft(w: WriteInput): Promise<{ draft: Draft; quality
     previous_draft: w.previousDraft || null,
     attempt: w.attempt || 1,
   };
-  const allowedSources = [...new Set([...w.allowedSources, "seller", "offer", "details", ...seller.products.map((x) => x.id), ...seller.proofPoints.map((x) => x.id), ...(w.supporting || []).map((x) => x.source_id), ...(feedback ? ["rep_feedback"] : [])])];
+  const allowedSources = [...new Set([...w.allowedSources, "seller", "prospect", "offer", "details", ...seller.products.map((x) => x.id), ...seller.proofPoints.map((x) => x.id), ...(w.supporting || []).map((x) => x.source_id), ...(feedback ? ["rep_feedback"] : [])])];
   let tokens = 0;
   let calls = 0;
   const first = await runWriter(base);

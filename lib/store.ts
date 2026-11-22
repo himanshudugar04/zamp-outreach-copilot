@@ -39,7 +39,7 @@ function safeSet(key: string, value: unknown) {
 }
 
 export function listRuns(): RunRecord[] {
-  return safeGet<RunRecord[]>(RUNS, []);
+  return safeGet<RunRecord[]>(RUNS, []).slice().sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
 }
 export function getRun(id: string) {
   return listRuns().find((r) => r.id === id);

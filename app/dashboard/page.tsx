@@ -42,6 +42,7 @@ export default function Dashboard() {
       replyRate: approved.length ? Math.round((withReply.length / approved.length) * 100) : null,
       positive: positive.length,
       credits: Math.round(credits * 100) / 100,
+      replies: shown.filter((r) => r.reply === "positive").length,
       stopped: stopped.length,
     };
   }, [shown]);
@@ -81,7 +82,7 @@ export default function Dashboard() {
         <Stat k="Stopped for a reason" v={stats.stopped} hint="Moved, ambiguous, customer, no fit" />
         <Stat k="Approval rate" v={stats.approvalRate === null ? "none yet" : `${stats.approvalRate}%`} />
         <Stat k="Average edit" v={stats.avgEdit === null ? "none yet" : `${stats.avgEdit}%`} hint="Share of words the rep changed" />
-        <Stat k="Credits spent" v={stats.credits} />
+        <Stat k="Replies" v={stats.replies} hint="Approved drafts marked positive" />
       </dl>
 
       {Object.keys(reasons).length > 0 && (
@@ -108,9 +109,7 @@ export default function Dashboard() {
                 <th className="px-3 py-2.5 font-normal">Purpose</th>
                 <th className="px-3 py-2.5 font-normal">Status</th>
                 <th className="px-3 py-2.5 font-normal">Hook or reason</th>
-                <th className="px-3 py-2.5 text-right font-normal">Quality</th>
                 <th className="px-3 py-2.5 text-right font-normal">Edited</th>
-                <th className="px-3 py-2.5 text-right font-normal">Credits</th>
                 <th className="px-3 py-2.5 font-normal">Reply</th>
                 <th className="px-4 py-2.5 text-right font-normal">When</th>
               </tr>
@@ -118,21 +117,19 @@ export default function Dashboard() {
             <tbody>
               {shown.map((r) => {
                 const st = STATUS[statusOf(r)] || STATUS.error;
-                const who = r.result.prospect?.name || r.input.name || r.input.linkedinUrl || r.input.findSuccessor?.companyName || "Unknown";
+                const who = r.result.prospect?.name || r.input.name || (r.input.findSuccessor ? `Successor search` : r.input.linkedinUrl ? "LinkedIn profile" : "Unknown");
                 return (
                   <tr key={r.id} className="border-b border-rule last:border-0 hover:bg-paper/60">
                     <td className="px-4 py-2.5">
                       <Link href={`/runs/${r.id}`} className="font-medium hover:text-sky">{who}</Link>
-                      <p className="text-2xs text-ink-3">{[r.result.prospect?.title, r.result.company?.name || r.input.company].filter(Boolean).join(", ")}</p>
+                      <p className="text-2xs text-ink-3">{[r.result.prospect?.title, r.result.company?.name || r.input.company || r.input.findSuccessor?.companyName].filter(Boolean).join(", ")}</p>
                     </td>
                     <td className="px-3 py-2.5 text-ink-2">{r.input.purposeName || PLAYBOOKS[r.input.purpose]?.name || r.input.purpose}</td>
                     <td className={`px-3 py-2.5 font-medium ${st.cls}`}>{st.label}</td>
                     <td className="max-w-[280px] px-3 py-2.5 text-ink-2">
                       <span className="line-clamp-2">{r.result.edge ? r.result.edge.title : r.result.hook ? `${r.result.hook.label}: ${r.result.hook.usable_fact}` : r.result.error}</span>
                     </td>
-                    <td className="num px-3 py-2.5 text-right">{r.result.quality?.score ?? ""}</td>
                     <td className="num px-3 py-2.5 text-right text-ink-2">{r.editDistance !== undefined ? `${r.editDistance}%` : ""}</td>
-                    <td className="num px-3 py-2.5 text-right text-ink-2">{r.result.usage.credits}</td>
                     <td className="px-3 py-2.5">
                       {r.approval === "approved" ? (
                         <select value={r.reply} onChange={(e) => setReply(r.id, e.target.value as Reply)} className="rounded border border-rule bg-sheet px-1.5 py-0.5 text-[12px]" aria-label="Reply outcome">

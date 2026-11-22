@@ -118,9 +118,10 @@ export function SignalList({
                 <span className="min-w-0 flex-1">
                   <span className={`block text-[14px] leading-snug text-ink ${isOpen ? "" : "line-clamp-2"}`}>{headline(sig)}</span>
                   <span className="mt-0.5 block text-[12px] text-ink-3">
-                    {sig.sourceName}, <span className={ageTone(sig.ageDays)}>{age(sig.ageDays)}</span>
+                    {sig.sourceName}{sig.ageDays !== null && <>, <span className={ageTone(sig.ageDays)}>{age(sig.ageDays)}</span></>}
                     {chosen && <span className="ml-1.5 font-medium text-sky">Used in the email</span>}
                     {sig.excluded === "sensitive" && <span className="ml-1.5 text-rust">Sensitive, not used</span>}
+                    {sig.excluded === "stale" && <span className="ml-1.5 text-ink-3">Too old to use</span>}
                   </span>
                 </span>
               </button>
@@ -157,8 +158,12 @@ export function SignalList({
 
 /** One readable line: news keeps its headline, everything else its first sentence. */
 function headline(sig: ScoredSignal) {
-  const first = sig.text.split(/(?<=[.!?])\s+/)[0];
-  return first.length > 140 ? first.slice(0, 137).trimEnd() + "…" : first;
+  const clean = sig.text.replace(/^\[Repost, not their own words\]\s*/, "").replace(/\s+/g, " ").trim();
+  // First sentence with real content: skip openers like "Hey." or "Two days."
+  const sentences = clean.split(/(?<=[.!?])\s+/);
+  const first = sentences.find((x) => x.split(" ").length >= 5) || clean;
+  const line = first.length > 140 ? first.slice(0, 137).trimEnd() + "…" : first;
+  return sig.text.startsWith("[Repost") ? `Repost: ${line}` : line;
 }
 
 export function ProspectMini({ p, c }: { p?: Prospect; c?: CompanyInfo }) {

@@ -55,6 +55,8 @@ export interface Playbook {
   execLength: { min: number; max: number };
   /** Detailed guidance on how the message should read: the writer's main brief */
   guidance: string;
+  /** The outline the email follows, in order. Empty means the writer picks a shape that fits the goal. */
+  structure: string;
   neverSay: string[];
   tone: string;
   extra: string;
@@ -167,6 +169,12 @@ SDR or Account Executive
 ## Executive length
 125 to 150 words
 
+## Structure
+1. Introduce yourself and Zamp in one or two plain sentences, framed around the kind of work this reader owns.
+2. Why them, why now: the most specific recent fact about them or their company (news, a post, an interview, hiring, funding) and the pressure it usually creates for someone in their role.
+3. Say Zamp has several product suites, then name the one or two that fit this company and what each would take off this reader's team. Add a proof point only if it matches.
+4. Ask whether they are open to a short chat.
+
 ## Message guidance
 Write like a sharp account executive who did ten minutes of homework, not like a marketing email. The reader is a finance or operations leader who gets dozens of vendor emails a week and deletes anything generic in two seconds, so the first two lines after the greeting must prove this email is about them.
 
@@ -233,6 +241,12 @@ A seat at an invite-only dinner for finance leaders. No product pitch.
 
 ## Executive length
 125 to 150 words
+
+## Structure
+1. Open with the invitation itself and why this person in particular should be in the room.
+2. One line, in the first person, saying you and Zamp are hosting it and that it is not a sales pitch.
+3. The evening: name, date, time, city, who else is coming, what they will take away.
+4. A simple yes or no question.
 
 ## Message guidance
 This is an invitation from a person, not an event announcement. The reader is a senior finance leader who is protective of their evenings, so the email has to make the dinner feel worth it for them specifically and make saying yes effortless.
@@ -309,6 +323,11 @@ Sponsorship of our annual summit with stage time and a booth.
 ## Call to action
 (Required) One to three example asks, one per line.
 - Open to a short call about it?
+
+## Structure
+(Recommended) The outline your email should follow, one step per line, in order. Leave it out and the writer picks a shape that fits your goal.
+1. ...
+2. ...
 
 ## Message guidance
 (Recommended) A detailed brief, around 200 words: what a great message for this purpose sounds like, what to emphasise for each kind of reader, what to avoid. The more context here, the better the drafts.
@@ -425,6 +444,7 @@ export function parsePlaybook(md: string, builtIn = false): ParseReport<Playbook
     length: { min: 175, max: 200 },
     execLength: { min: 125, max: 150 },
     guidance: "",
+    structure: "",
     neverSay: [],
     tone: "",
     extra: "",
@@ -438,6 +458,7 @@ export function parsePlaybook(md: string, builtIn = false): ParseReport<Playbook
     if (!s.body) continue;
     const text = s.body.replace(/\n+/g, " ");
     if (/guidance|how to write|writing brief|message brief|instructions/.test(h)) (v.guidance = s.body.slice(0, 3000)), found.push("Message guidance");
+    else if (/structure|outline|format|flow|shape/.test(h)) (v.structure = s.body.slice(0, 1500)), found.push("Structure");
     else if (/exec|senior/.test(h) && /length|word/.test(h)) {
       const nums = (s.body.match(/\d+/g) || []).map(Number).filter((n) => n >= 20 && n <= 400);
       if (nums.length >= 2) v.execLength = { min: Math.min(nums[0], nums[1]), max: Math.max(nums[0], nums[1]) };

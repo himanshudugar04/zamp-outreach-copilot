@@ -14,6 +14,7 @@ import {
   addCompanyContext,
   addProofPoint,
   deleteCustomPurpose,
+  removeProofPoint,
   downloadText,
   getCompanyFile,
   listPurposes,
@@ -127,12 +128,12 @@ function CompanyCard({ company, p, onChange }: { company: { md: string; fileName
       <button onClick={() => setDetails((v) => !v)} aria-expanded={details} className="flex w-full items-center gap-1 border-t border-rule px-6 py-3 text-[14px] text-ink-2 hover:text-ink">
         {details ? "Hide details" : "View products, proof points and do-not-contact list"} <ChevronDown size={15} className={details ? "rotate-180" : ""} />
       </button>
-      {details && <CompanyBody p={p} />}
+      {details && <CompanyBody p={p} onRemoveProof={(i) => { removeProofPoint(i); onChange(); }} />}
     </section>
   );
 }
 
-function CompanyBody({ p }: { p: CompanyProfile }) {
+function CompanyBody({ p, onRemoveProof }: { p: CompanyProfile; onRemoveProof: (index: number) => void }) {
   return (
     <div className="grid gap-6 border-t border-rule px-6 py-5 md:grid-cols-2">
       <div>
@@ -150,12 +151,17 @@ function CompanyBody({ p }: { p: CompanyProfile }) {
         <div>
           <p className="text-[14px] font-semibold">Proof points</p>
           <ul className="mt-2 space-y-1.5 text-[13px] text-ink-2">
-            {p.proofPoints.length ? p.proofPoints.map((x) => (
-              <li key={x.id}>
+            {p.proofPoints.length ? p.proofPoints.map((x, i) => (
+              <li key={x.id} className="group flex items-start gap-2">
+                <span className="flex-1">
                 {x.text}
                 {x.sourceUrl && (
                   <a href={x.sourceUrl} target="_blank" rel="noreferrer" className="ml-1 inline-flex align-middle text-ink-3 hover:text-sky" aria-label="Source"><ExternalLink size={11} /></a>
                 )}
+                </span>
+                <button onClick={() => onRemoveProof(i)} aria-label={`Remove proof point: ${x.text}`} title="Remove" className="shrink-0 rounded p-0.5 text-ink-3 hover:bg-brick/10 hover:text-brick">
+                  <X size={13} />
+                </button>
               </li>
             )) : <li className="text-ink-3">None yet.</li>}
           </ul>
@@ -205,6 +211,7 @@ function PurposeCard({ e, onDelete }: { e: PurposeEntry; onDelete: () => void })
               </Detail>
               {offer && <Detail k="Offer">{p.offer}</Detail>}
               {p.details && <Detail k="Details"><span className="whitespace-pre-line">{p.details.replace(/^[-*]\s*/gm, "")}</span></Detail>}
+              {p.structure && <Detail k="Structure"><span className="whitespace-pre-line">{p.structure}</span></Detail>}
               {p.guidance && <Detail k="How the message should read"><span className="whitespace-pre-line">{p.guidance}</span></Detail>}
               <Detail k="Length">{p.length.min} to {p.length.max} words, {p.execLength.min} to {p.execLength.max} for senior readers</Detail>
               <Detail k="The ask">“{p.ctaExamples[0]}”</Detail>

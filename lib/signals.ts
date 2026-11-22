@@ -72,10 +72,13 @@ export function buildSignals(r: RawResearch, includeLocation: boolean, hiringTop
   if (c) {
     const fAge = ageInDays(c.lastRoundDate);
     if (c.lastRoundDate && fAge !== null && fAge <= 400) {
+      const secondary = /secondary/i.test(String(c.lastRound || ""));
       push({
         type: "funding",
-        label: "Funding",
-        text: `${cname} raised ${prettyRound(c.lastRound)}${c.lastRoundUsd ? ` of ${money(c.lastRoundUsd)}` : ""} on ${fmtDate(c.lastRoundDate)}${c.totalFundingUsd ? ` (total raised ${money(c.totalFundingUsd)})` : ""}.`,
+        label: secondary ? "Share sale" : "Funding",
+        text: secondary
+          ? `Investors bought ${c.lastRoundUsd ? `${money(c.lastRoundUsd)} of ` : ""}existing ${cname} shares in a secondary deal on ${fmtDate(c.lastRoundDate)}. ${cname} did not raise new money in it.`
+          : `${cname} raised ${prettyRound(c.lastRound)}${c.lastRoundUsd ? ` of ${money(c.lastRoundUsd)}` : ""} on ${fmtDate(c.lastRoundDate)}${c.totalFundingUsd ? ` (total raised ${money(c.totalFundingUsd)})` : ""}.`,
         date: c.lastRoundDate,
         ageDays: fAge,
         sourceUrl: c.linkedinUrl,
@@ -198,7 +201,7 @@ export function buildSignals(r: RawResearch, includeLocation: boolean, hiringTop
       type: "location",
       label: "Location",
       text: `${p.name} is based in ${p.location}.`,
-      ageDays: 30,
+      ageDays: null,
       sourceUrl: p.profileUrl,
       sourceName: "Profile",
     });

@@ -187,8 +187,8 @@ export function RunView({
                 busy={busy}
                 active={active}
                 setActive={setActive}
-                onApprove={(s, b) => patch({ approval: "approved", finalSubject: s, finalBody: b, editDistance: editShare(result.draft!.body, b) })}
-                onSaveEdit={(s, b) => patch({ finalSubject: s, finalBody: b, editDistance: editShare(result.draft!.body, b) })}
+                onApprove={(s, b) => patch({ approval: "approved", finalSubject: s, finalBody: b, editDistance: editShare(`${result.draft!.subject}\n${result.draft!.body}`, `${s}\n${b}`) })}
+                onSaveEdit={(s, b) => patch({ finalSubject: s, finalBody: b, editDistance: editShare(`${result.draft!.subject}\n${result.draft!.body}`, `${s}\n${b}`) })}
                 onRegenerate={(fb) => redraft(result.hook!, record!.regenerations + 2, fb)}
                 onReject={(reason) => patch({ approval: "rejected", rejectReason: reason })}
               />

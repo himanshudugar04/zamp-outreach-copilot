@@ -123,3 +123,19 @@ export function addCompanyContext(text: string) {
   const clean = text.trim();
   setCompanyFile(appendToSection(c.md, /anything else|context|notes/i, "Anything else", clean), c.fileName || "company.md");
 }
+
+/** Remove the nth bullet (0-based) from the company file's proof points section. */
+export function removeProofPoint(index: number) {
+  const c = getCompanyFile();
+  const lines = c.md.replace(/\r\n?/g, "\n").split("\n");
+  const start = lines.findIndex((l) => /^\s*##\s+/.test(l) && /proof|case stud|result/i.test(l));
+  if (start === -1) return;
+  let seen = -1;
+  for (let i = start + 1; i < lines.length && !/^\s*##\s+/.test(lines[i]); i++) {
+    if (/^\s*([-*•]|\d+[.)])\s+/.test(lines[i]) && ++seen === index) {
+      lines.splice(i, 1);
+      setCompanyFile(lines.join("\n"), c.fileName || "company.md");
+      return;
+    }
+  }
+}
