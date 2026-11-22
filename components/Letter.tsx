@@ -5,7 +5,7 @@ import type { Claim, Draft, QualityReport, RunResult } from "@/lib/types";
 
 type Seg = { text: string; n?: number };
 
-function segment(body: string, claims: Claim[]): { segs: Seg[]; notes: { n: number; claim: Claim }[] } {
+export function segment(body: string, claims: Claim[]): { segs: Seg[]; notes: { n: number; claim: Claim }[] } {
   const marks: { start: number; end: number; claim: Claim }[] = [];
   for (const c of claims) {
     if (!c.text) continue;
@@ -18,14 +18,30 @@ function segment(body: string, claims: Claim[]): { segs: Seg[]; notes: { n: numb
   const notes: { n: number; claim: Claim }[] = [];
   const segs: Seg[] = [];
   let at = 0;
-  marks.forEach((m, k) => {
+  // One number per source, in order of first appearance; a source used twice keeps its number.
+  const num = new Map<string, number>();
+  marks.forEach((m) => {
     if (m.start > at) segs.push({ text: body.slice(at, m.start) });
-    segs.push({ text: body.slice(m.start, m.end), n: k + 1 });
-    notes.push({ n: k + 1, claim: m.claim });
+    let n = num.get(m.claim.source_id);
+    if (!n) {
+      n = num.size + 1;
+      num.set(m.claim.source_id, n);
+      notes.push({ n, claim: m.claim });
+    }
+    segs.push({ text: body.slice(m.start, m.end), n });
     at = m.end;
   });
   if (at < body.length) segs.push({ text: body.slice(at) });
   return { segs, notes };
+}
+
+/** Skip a repeated footnote number when the same source continues in the same sentence. */
+function sameSourceNext(segs: Seg[], i: number) {
+  for (let j = i + 1; j < segs.length; j++) {
+    if (segs[j].n) return segs[j].n === segs[i].n;
+    if (/[.!?\n]/.test(segs[j].text)) return false;
+  }
+  return false;
 }
 
 const REJECT_REASONS = ["Wrong hook", "Wrong tone", "Factually off", "Wrong person"];
@@ -44,6 +60,8 @@ export function Letter({
   onSaveEdit,
   onRegenerate,
   onReject,
+  active,
+  setActive,
 }: {
   result: RunResult;
   draft: Draft;
@@ -57,6 +75,8 @@ export function Letter({
   onSaveEdit: (subject: string, body: string) => void;
   onRegenerate: (feedback: string) => void;
   onReject: (reason: string) => void;
+  active: number | null;
+  setActive: (n: number | null) => void;
 }) {
   const subject = finalSubject ?? draft.subject;
   const body = finalBody ?? draft.body;
@@ -65,7 +85,6 @@ export function Letter({
   const [eSub, setESub] = useState(subject);
   const [eBody, setEBody] = useState(body);
   const [rejecting, setRejecting] = useState(false);
-  const [active, setActive] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
   const [asking, setAsking] = useState(false);
   const [fb, setFb] = useState("");
@@ -75,7 +94,7 @@ export function Letter({
     setAsking(false);
     setFb("");
   };
-  const { segs, notes } = useMemo(() => segment(body, edited ? [] : draft.claims), [body, draft.claims, edited]);
+  const { segs } = useMemo(() => segment(body, edited ? [] : draft.claims), [body, draft.claims, edited]);
 
   const approve = async () => {
     try {
@@ -125,34 +144,13 @@ export function Letter({
               s.n ? (
                 <span key={i} className="cite" data-active={active === s.n} onMouseEnter={() => setActive(s.n!)} onMouseLeave={() => setActive(null)}>
                   {s.text}
-                  <sup className="ml-0.5 font-sans text-[10px] font-semibold text-sky">{s.n}</sup>
+                  {!sameSourceNext(segs, i) && <sup className="ml-0.5 font-sans text-[10px] font-semibold text-sky">{s.n}</sup>}
                 </span>
               ) : (
                 <span key={i}>{s.text}</span>
               )
             )}
           </div>
-          {notes.length > 0 && (
-            <ol className="mt-5 space-y-1 border-t border-rule pt-3 text-[12px] text-ink-2">
-              {notes.map(({ n, claim }) => {
-                const src = result.sources[claim.source_id];
-                return (
-                  <li key={n} className={`flex gap-2 ${active === n ? "text-ink" : ""}`} onMouseEnter={() => setActive(n)} onMouseLeave={() => setActive(null)}>
-                    <span className="num w-3 shrink-0 font-semibold text-sky">{n}</span>
-                    <span>
-                      {src?.label || claim.source_id}
-                      {src?.date ? `, ${src.date.slice(0, 10)}` : ""}
-                      {src?.url && (
-                        <a href={src.url} target="_blank" rel="noreferrer" className="ml-1 inline-flex items-center text-sky hover:underline" aria-label="Open source">
-                          <ExternalLink size={11} />
-                        </a>
-                      )}
-                    </span>
-                  </li>
-                );
-              })}
-            </ol>
-          )}
           {edited && <p className="mt-4 text-2xs text-ink-3">Edited by you. Footnotes are hidden because the wording changed.</p>}
         </div>
       )}
@@ -167,7 +165,6 @@ export function Letter({
       {asking && !editing && (
         <div className="border-t border-rule bg-sky-soft/50 px-6 py-4">
           <label htmlFor="fb" className="text-[13px] font-medium text-ink">What should change?</label>
-          <p className="text-2xs text-ink-3">Tell it what to add, remove or change. It keeps every fact sourced, so it will say if it can't add something.</p>
           <div className="mt-2 flex flex-wrap gap-1.5">
             {QUICK_ASKS.map((q) => (
               <button
@@ -198,12 +195,19 @@ export function Letter({
               Just try a fresh version
             </button>
             <button onClick={() => setAsking(false)} className="ml-auto text-[12px] text-ink-3 hover:text-ink">Cancel</button>
-            <span className="num w-full text-2xs text-ink-3">{left} redraft{left === 1 ? "" : "s"} left for this run</span>
           </div>
         </div>
       )}
 
-      {quality && !editing && <QualityStrip q={quality} />}
+      {quality && !editing && (quality.unsupportedClaims.length > 0 || quality.bannedFound.length > 0) && (
+        <p className="mx-6 mb-4 flex gap-2 rounded-lg bg-rust-soft/60 px-3 py-2 text-[13px] text-ink-2">
+          <Info size={14} className="mt-0.5 shrink-0 text-rust" />
+          <span>
+            {quality.unsupportedClaims.length > 0 && <>Check before sending: {quality.unsupportedClaims.length} phrase{quality.unsupportedClaims.length > 1 ? "s" : ""} could not be traced to a source. </>}
+            {quality.bannedFound.length > 0 && <>Avoid: {quality.bannedFound.join(", ")}.</>}
+          </span>
+        </p>
+      )}
 
       {!editing && (
         <footer className="flex flex-wrap items-center gap-2 border-t border-rule px-6 py-3">

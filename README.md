@@ -32,6 +32,28 @@ Built for the Zamp AI Solutions Analyst case study (PS-3, personalised outreach)
 | Existing Zamp customer | Stops before research |
 | Person opted out of data | Hard stop |
 | Prompt injection in scraped text | Signal marked suspicious and ignored |
+| Wrong persona for the purpose | Stops and explains, with "write anyway" if the rep knows better |
+| Work email from a past employer | Never used as the To address |
+
+### Try these on the live site
+
+Type the name and company on New prospect, with the purpose shown.
+
+| Prospect | Company | Purpose | Shows |
+|---|---|---|---|
+| Adi Asali | Rippling | Sales outreach | Happy path: new VP Finance, company hiring heavily in finance ops |
+| Sean Delehanty | Databricks | Sales outreach | Sensitive company news held back |
+| Marijan Luksa | Databricks | Sales outreach | Person left the company |
+| Rahul Sharma | Infosys | Sales outreach | Several people match, the desk refuses to guess |
+| Emily Reuter | Instacart | Sales outreach | Existing customer, stops before research |
+| Rahul Bothra | Swiggy | Event invite | Bengaluru CFO invited to the sample roundtable |
+
+## Playbooks
+
+Everything the writer knows about the seller and the purpose comes from two plain markdown files, editable on the Playbooks page:
+
+- **Company profile**: about, product suites (with when each fits), proof points, do-not-contact list. Reps can upload a new one, add context, or add proof points.
+- **Purpose playbooks**: one per kind of outreach. Sales outreach and Event invite are built in; reps can add their own (Sponsorship, Webinar invite…) from the downloadable template. Each has a detailed message brief and two lengths: 175 to 200 words, or 125 to 150 for VP and C-level readers.
 
 ## Run locally
 

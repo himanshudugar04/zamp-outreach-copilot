@@ -1,11 +1,11 @@
 "use client";
-import { useState } from "react";
-import { AlertTriangle, Info, ShieldAlert } from "lucide-react";
-import { StageLog, type StageMap } from "./StageLog";
-import { ProspectCard, SignalList } from "./Evidence";
-import { Letter } from "./Letter";
+import { useMemo, useState } from "react";
+import { ChevronDown, ExternalLink, Loader2 } from "lucide-react";
+import { STAGES, StageLog, type StageMap } from "./StageLog";
+import { ProspectMini, SignalList } from "./Evidence";
+import { Letter, segment } from "./Letter";
 import { EdgePanel } from "./EdgePanel";
-import { PLAYBOOKS } from "@/lib/playbooks";
+import { PLAYBOOKS, resolvePlaybook } from "@/lib/playbooks";
 import { editShare, updateRun, type RunRecord } from "@/lib/store";
 import type { Candidate, Hook, RunInput, ScoredSignal } from "@/lib/types";
 
@@ -24,8 +24,16 @@ export function RunView({
 }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [active, setActive] = useState<number | null>(null);
+  const [showLog, setShowLog] = useState(false);
   const result = record?.result;
   const input = record?.input;
+  const draftOk = result?.draft?.status === "ok" ? result.draft : undefined;
+  const edited = !!draftOk && record?.finalBody !== undefined && record.finalBody !== draftOk.body;
+  const notes = useMemo(
+    () => (draftOk && !edited ? segment(record?.finalBody ?? draftOk.body, draftOk.claims).notes : []),
+    [draftOk, edited, record?.finalBody]
+  );
 
   const patch = (p: Partial<RunRecord>) => {
     if (!record) return;
@@ -95,31 +103,69 @@ export function RunView({
 
   const playbook = input ? { name: input.purposeName || PLAYBOOKS[input.purpose]?.name || input.purpose } : undefined;
 
+  const pb = input ? resolvePlaybook(input.purpose, input.playbookMd) : undefined;
+
   return (
-    <div className="grid gap-6 xl:grid-cols-[240px_minmax(0,1fr)_360px] lg:grid-cols-[220px_minmax(0,1fr)]">
-      <aside className="order-2 lg:order-none lg:sticky lg:top-6 lg:self-start">
-        <StageLog stages={stages} live={live} />
-        {result && (
-          <dl className="mt-6 grid grid-cols-3 gap-2 border-t border-rule pt-3 text-2xs text-ink-3">
-            <div><dt>Time</dt><dd className="num text-[13px] text-ink">{(result.durationMs / 1000).toFixed(1)}s</dd></div>
-            <div><dt>Credits</dt><dd className="num text-[13px] text-ink">{result.usage.credits}</dd></div>
-            <div><dt>AI calls</dt><dd className="num text-[13px] text-ink">{result.usage.llmCalls}</dd></div>
-          </dl>
+    <div className="grid gap-6 lg:grid-cols-[250px_minmax(0,1fr)] xl:grid-cols-[250px_minmax(0,1fr)_340px]">
+      {/* Left: who, and where every line came from */}
+      <aside className="order-2 space-y-6 lg:order-none lg:sticky lg:top-6 lg:self-start">
+        {result?.prospect && <ProspectMini p={result.prospect} c={result.company} />}
+        {notes.length > 0 && (
+          <section aria-label="Where this came from">
+            <h2 className="text-[15px] font-semibold">Where this came from</h2>
+            <ol className="mt-2 space-y-1.5">
+              {notes.map(({ n, claim }) => {
+                const src = result!.sources[claim.source_id];
+                return (
+                  <li
+                    key={n}
+                    onMouseEnter={() => setActive(n)}
+                    onMouseLeave={() => setActive(null)}
+                    className={`flex gap-2 rounded-md px-1.5 py-1 text-[13px] ${active === n ? "bg-marker text-ink" : "text-ink-2"}`}
+                  >
+                    <span className="num w-4 shrink-0 font-semibold text-sky">{n}</span>
+                    <span className="min-w-0">
+                      {src?.label || claim.source_id}
+                      {src?.url && (
+                        <a href={src.url} target="_blank" rel="noreferrer" className="ml-1 inline-flex align-middle text-sky" aria-label="Open source">
+                          <ExternalLink size={12} />
+                        </a>
+                      )}
+                    </span>
+                  </li>
+                );
+              })}
+            </ol>
+          </section>
+        )}
+        {(result || live) && (
+          <div>
+            <button onClick={() => setShowLog((v) => !v)} aria-expanded={showLog} className="inline-flex items-center gap-1 text-[13px] text-ink-3 hover:text-ink">
+              How this was researched <ChevronDown size={14} className={showLog ? "rotate-180" : ""} />
+            </button>
+            {showLog && (
+              <div className="mt-3 rounded-xl border border-rule bg-sheet p-4">
+                <StageLog stages={stages} live={live} />
+                {result && (
+                  <p className="num mt-4 border-t border-rule pt-3 text-[12px] text-ink-3">
+                    {(result.durationMs / 1000).toFixed(1)}s, {result.usage.credits} Crustdata credits, {result.usage.llmCalls} AI calls
+                  </p>
+                )}
+                {result?.analysisNotes?.map((n, i) => <p key={i} className="mt-2 text-[12px] text-ink-2">{n}</p>)}
+              </div>
+            )}
+          </div>
         )}
       </aside>
 
+      {/* Centre: the email */}
       <div className="order-1 min-w-0 space-y-4 lg:order-none">
-        {!result && live && (
-          <div className="rounded-xl border border-dashed border-rule bg-sheet/60 p-10 text-center text-ink-2">
-            <p className="text-[17px] font-semibold text-ink">Researching before writing anything.</p>
-            <p className="mt-1 text-[13px]">Each step on the left ticks off as it finishes. The draft appears only if there is something true and specific to say.</p>
-          </div>
-        )}
+        {!result && live && <Progress stages={stages} />}
 
         {result?.status === "error" && (
           <div className="rounded-xl border border-brick/30 bg-brick-soft/60 p-5">
-            <p className="font-semibold text-brick">The run stopped</p>
-            <p className="mt-1 text-[13px] text-ink-2">{result.error}</p>
+            <p className="text-[16px] font-semibold text-brick">The run stopped</p>
+            <p className="mt-1 text-[14px] text-ink-2">{result.error}</p>
           </div>
         )}
 
@@ -127,8 +173,8 @@ export function RunView({
 
         {result?.hook && result.draft && (
           <>
-            <HookCard hook={result.hook} result={result} purposeName={playbook?.name} />
-            <Banners result={result} />
+            <WhyNow hook={result.hook} result={result} />
+            <Notice result={result} execRange={pb?.execLength} />
             {result.draft.status === "ok" ? (
               <Letter
                 result={result}
@@ -139,6 +185,8 @@ export function RunView({
                 finalBody={record!.finalBody}
                 regenerations={record!.regenerations}
                 busy={busy}
+                active={active}
+                setActive={setActive}
                 onApprove={(s, b) => patch({ approval: "approved", finalSubject: s, finalBody: b, editDistance: editShare(result.draft!.body, b) })}
                 onSaveEdit={(s, b) => patch({ finalSubject: s, finalBody: b, editDistance: editShare(result.draft!.body, b) })}
                 onRegenerate={(fb) => redraft(result.hook!, record!.regenerations + 2, fb)}
@@ -146,77 +194,82 @@ export function RunView({
               />
             ) : (
               <div className="rounded-xl border border-rust/30 bg-rust-soft/60 p-5">
-                <p className="font-semibold">The writer declined to draft</p>
-                <p className="mt-1 text-[13px] text-ink-2">{result.draft.insufficient_reason}</p>
-                <p className="mt-1 text-2xs text-ink-3">Pick another signal on the right to try a different opening.</p>
+                <p className="text-[16px] font-semibold">Nothing true and specific enough to write</p>
+                <p className="mt-1 text-[14px] text-ink-2">{result.draft.insufficient_reason}</p>
+                <p className="mt-1 text-[13px] text-ink-3">Open one of the findings on the right and choose “Write from this instead”.</p>
               </div>
             )}
-            {err && <p className="text-[13px] text-brick">{err}</p>}
+            {err && <p className="text-[14px] text-brick">{err}</p>}
           </>
         )}
       </div>
 
-      <aside className="order-3 space-y-4 lg:order-none lg:col-span-2 xl:col-span-1">
-        <ProspectCard p={result?.prospect} c={result?.company} />
+      {/* Right: what we found, as headlines */}
+      <aside className="order-3 lg:order-none lg:col-span-2 xl:col-span-1">
         {result && result.signals.length > 0 && (
-          <div>
-            <div className="mb-2 flex items-baseline justify-between">
-              <h2 className="text-[13px] font-semibold">Signals, ranked</h2>
-              <span className="text-2xs text-ink-3">{result.signals.filter((s) => !s.excluded).length} usable of {result.signals.length}</span>
-            </div>
+          <>
+            <h2 className="mb-2 text-[15px] font-semibold">What we found</h2>
             <SignalList result={result} chosenId={result.hook?.source_id} onUse={result.draft ? useSignal : undefined} busy={busy} />
-          </div>
-        )}
-        {result?.analysisNotes && result.analysisNotes.length > 0 && (
-          <div className="rounded-lg border border-rule bg-sheet p-3 text-[12px] text-ink-2">
-            <p className="mb-1 flex items-center gap-1 font-medium text-ink"><Info size={13} /> Notes for the reviewer</p>
-            {result.analysisNotes.map((n, i) => <p key={i}>{n}</p>)}
-          </div>
+          </>
         )}
       </aside>
     </div>
   );
 }
 
-function HookCard({ hook, result, purposeName }: { hook: Hook; result: NonNullable<RunRecord["result"]>; purposeName?: string }) {
-  const chosen = result.signals.find((s) => s.id === hook.source_id);
-  const src = result.sources[hook.source_id];
+const FRIENDLY: Record<string, string> = {
+  resolve: "Finding the right person",
+  person: "Reading their profile",
+  company: "Checking company news, jobs, posts and press",
+  hiring: "Checking company news, jobs, posts and press",
+  posts: "Checking company news, jobs, posts and press",
+  news: "Checking company news, jobs, posts and press",
+  analyze: "Picking the strongest reason to write",
+  draft: "Writing the draft",
+  check: "Checking every fact against its source",
+};
+
+function Progress({ stages }: { stages: StageMap }) {
+  const done = STAGES.filter((s) => stages[s.id] && stages[s.id]!.status !== "running").length;
+  const running = STAGES.find((s) => stages[s.id]?.status === "running");
+  const label = running ? FRIENDLY[running.id] : done === 0 ? "Starting" : "Finishing up";
   return (
-    <section className="rounded-xl border-l-4 border-sky bg-sky-soft px-5 py-4">
-      <p className="text-2xs font-medium text-sky-deep">Why this email, for {purposeName?.toLowerCase()}</p>
-      <p className="mt-1 text-[17px] font-medium leading-snug text-ink">{hook.usable_fact}</p>
-      <p className="mt-1 text-[13px] text-ink-2">{hook.angle}</p>
-      <p className="mt-2 text-2xs text-ink-3">
-        {src?.label}
-        {chosen ? `, score ${chosen.score} (relevance ${chosen.judgement?.relevance ?? 0}/5, recency ${chosen.recency}/3)` : ""}
+    <div className="rounded-xl border border-rule bg-sheet px-6 py-8" aria-live="polite">
+      <p className="flex items-center gap-2 text-[17px] font-semibold text-ink">
+        <Loader2 size={18} className="spin text-sky" /> {label}…
+      </p>
+      <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-paper">
+        <div className="h-full rounded-full bg-sky transition-[width] duration-500" style={{ width: `${Math.max(6, (done / STAGES.length) * 100)}%` }} />
+      </div>
+      <p className="mt-3 text-[14px] text-ink-2">The draft appears only if there is something true and specific to say.</p>
+    </div>
+  );
+}
+
+function WhyNow({ hook, result }: { hook: Hook; result: NonNullable<RunRecord["result"]> }) {
+  const chosen = result.signals.find((s) => s.id === hook.source_id);
+  return (
+    <section className="rounded-xl bg-sky-soft px-5 py-3.5">
+      <p className="text-[12px] font-medium text-sky-deep">Why write now</p>
+      <p className="mt-0.5 text-[16px] leading-snug text-ink">
+        {hook.usable_fact}
         {chosen?.sourceUrl && (
-          <>
-            {", "}
-            <a href={chosen.sourceUrl} target="_blank" rel="noreferrer" className="text-sky hover:underline">open source</a>
-          </>
+          <a href={chosen.sourceUrl} target="_blank" rel="noreferrer" className="ml-1.5 inline-flex items-center gap-0.5 align-middle text-[13px] text-sky hover:underline">
+            source <ExternalLink size={11} />
+          </a>
         )}
       </p>
     </section>
   );
 }
 
-function Banners({ result }: { result: NonNullable<RunRecord["result"]> }) {
-  const b: { tone: "rust" | "ink"; icon: any; title: string; text: string }[] = [];
-  if (result.flags.lowPersonalization)
-    b.push({ tone: "rust", icon: AlertTriangle, title: "No timely signal found", text: "This draft only uses their role and company. It is honest but generic. Consider waiting for a real trigger before sending." });
-  if (result.flags.sensitiveSkipped)
-    b.push({ tone: "rust", icon: ShieldAlert, title: "Held back sensitive signals", text: `${result.flags.sensitiveSkipped}. These are never used as an opener.` });
-  if (result.flags.personaWeak) b.push({ tone: "ink", icon: Info, title: "Weak persona fit", text: result.flags.personaWeak });
-  if (result.executive) b.push({ tone: "ink", icon: Info, title: "Executive mode", text: "Senior prospect: kept at the short end of the playbook's length, with a lighter ask." });
-  if (!b.length) return null;
-  return (
-    <div className="space-y-2">
-      {b.map((x) => (
-        <div key={x.title} className={`flex gap-2.5 rounded-lg border px-4 py-2.5 text-[13px] ${x.tone === "rust" ? "border-rust/30 bg-rust-soft/60" : "border-rule bg-sheet"}`}>
-          <x.icon size={15} className={`mt-0.5 shrink-0 ${x.tone === "rust" ? "text-rust" : "text-ink-2"}`} />
-          <p><span className="font-medium">{x.title}.</span> <span className="text-ink-2">{x.text}</span></p>
-        </div>
-      ))}
-    </div>
-  );
+function Notice({ result, execRange }: { result: NonNullable<RunRecord["result"]>; execRange?: { min: number; max: number } }) {
+  const parts: string[] = [];
+  if (result.flags.lowPersonalization) parts.push("No timely signal found, so this only uses their role. Consider waiting for a real trigger.");
+  if (result.flags.personaWeak) parts.push(result.flags.personaWeak);
+  if (result.flags.sensitiveSkipped) parts.push("Sensitive news about the company was left out on purpose.");
+  if (result.executive && execRange) parts.push(`Senior reader, so kept to ${execRange.min} to ${execRange.max} words.`);
+  if (!parts.length) return null;
+  const warn = result.flags.lowPersonalization || result.flags.personaWeak;
+  return <p className={`px-1 text-[13px] ${warn ? "text-rust" : "text-ink-3"}`}>{parts.join(" ")}</p>;
 }

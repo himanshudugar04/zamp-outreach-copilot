@@ -91,65 +91,96 @@ export function SignalList({
   busy?: boolean;
 }) {
   const [all, setAll] = useState(false);
+  const [open, setOpen] = useState<string | null>(null);
   const s = result.signals;
-  if (!s.length) return <p className="text-[13px] text-ink-3">No signals found for this person yet.</p>;
-  const max = Math.max(...s.map((x) => x.score), 1);
-  const shown = all ? s : s.slice(0, 5);
+  if (!s.length) return <p className="text-[14px] text-ink-3">Nothing recent found for this person yet.</p>;
+  const usable = s.filter((x) => !x.excluded);
+  const rest = s.filter((x) => x.excluded);
+  const shown = all ? [...usable, ...rest] : usable.slice(0, 6);
   return (
     <>
-    <ol className="space-y-2">
-      {shown.map((sig) => {
-        const chosen = sig.id === chosenId;
-        const j = sig.judgement;
-        return (
-          <li key={sig.id} className={`rounded-xl border p-3 ${chosen ? "border-sky bg-sky-soft/60 ring-1 ring-sky/30" : "border-rule bg-sheet"}`}>
-            <div className="flex items-center justify-between gap-2 text-2xs">
-              <span className="flex items-center gap-1.5">
-                {(() => { const t = TYPE_STYLE[sig.type]; const I = t.icon; return <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-medium ${t.cls}`}><I size={11} />{sig.label}</span>; })()}
-                <span className={ageTone(sig.ageDays)}>{age(sig.ageDays)}</span>
-              </span>
-              <span className="num flex items-center gap-1.5 text-ink-2" title="Score = relevance x 2 + recency + specificity">
-                <span className="h-1 w-12 overflow-hidden rounded-full bg-paper">
-                  <span className={`block h-full ${chosen ? "bg-sky" : "bg-ink-3"}`} style={{ width: `${Math.max(4, (sig.score / max) * 100)}%` }} />
+      <ul className="divide-y divide-rule rounded-xl border border-rule bg-sheet">
+        {shown.map((sig) => {
+          const chosen = sig.id === chosenId;
+          const isOpen = open === sig.id;
+          const t = TYPE_STYLE[sig.type];
+          const I = t.icon;
+          return (
+            <li key={sig.id} className={chosen ? "bg-sky-soft/50" : ""}>
+              <button
+                onClick={() => setOpen(isOpen ? null : sig.id)}
+                aria-expanded={isOpen}
+                className="flex w-full items-start gap-2.5 px-3.5 py-2.5 text-left hover:bg-paper/60"
+              >
+                <span className={`mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-md ${t.cls}`} title={sig.label}>
+                  <I size={13} />
                 </span>
-                {sig.score}
-              </span>
-            </div>
-            <p className="mt-1 text-[13px] leading-snug text-ink">{sig.text}</p>
-            {j?.angle && <p className="mt-1 text-[12px] italic text-ink-2">{j.angle}</p>}
-            <div className="mt-1.5 flex items-center justify-between gap-2 text-2xs">
-              {sig.sourceUrl ? (
-                <a href={sig.sourceUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-ink-3 hover:text-sky">
-                  {sig.sourceName} <ExternalLink size={10} />
-                </a>
-              ) : (
-                <span className="text-ink-3">{sig.sourceName}</span>
+                <span className="min-w-0 flex-1">
+                  <span className={`block text-[14px] leading-snug text-ink ${isOpen ? "" : "line-clamp-2"}`}>{headline(sig)}</span>
+                  <span className="mt-0.5 block text-[12px] text-ink-3">
+                    {sig.sourceName}, <span className={ageTone(sig.ageDays)}>{age(sig.ageDays)}</span>
+                    {chosen && <span className="ml-1.5 font-medium text-sky">Used in the email</span>}
+                    {sig.excluded === "sensitive" && <span className="ml-1.5 text-rust">Sensitive, not used</span>}
+                  </span>
+                </span>
+              </button>
+              {isOpen && (
+                <div className="space-y-2 px-3.5 pb-3 pl-[50px] text-[13px]">
+                  {sig.text !== headline(sig) && <p className="text-ink-2">{sig.text}</p>}
+                  {sig.judgement?.angle && <p className="text-ink-2">{sig.judgement.angle}</p>}
+                  <div className="flex flex-wrap items-center gap-3">
+                    {sig.sourceUrl && (
+                      <a href={sig.sourceUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-medium text-sky hover:underline">
+                        Open source <ExternalLink size={12} />
+                      </a>
+                    )}
+                    {!chosen && !sig.excluded && onUse && (
+                      <button disabled={busy} onClick={() => onUse(sig)} className="font-medium text-ink hover:underline disabled:opacity-40">
+                        Write from this instead
+                      </button>
+                    )}
+                  </div>
+                </div>
               )}
-              {chosen ? (
-                <span className="rounded-full bg-sky px-2 py-0.5 font-medium text-white">Chosen hook</span>
-              ) : sig.excluded === "sensitive" ? (
-                <span className="inline-flex items-center gap-1 text-rust" title={j?.sensitive_reason}>
-                  <ShieldAlert size={11} /> Sensitive, never a hook
-                </span>
-              ) : sig.excluded === "injection" ? (
-                <span className="text-brick">Suspicious text, ignored</span>
-              ) : sig.excluded === "weak" ? (
-                <span className="text-ink-3">Too weak</span>
-              ) : onUse ? (
-                <button disabled={busy} onClick={() => onUse(sig)} className="font-medium text-sky hover:underline disabled:opacity-40">
-                  Use this instead
-                </button>
-              ) : null}
-            </div>
-          </li>
-        );
-      })}
-    </ol>
-    {s.length > 5 && (
-      <button onClick={() => setAll((v) => !v)} className="mt-2 text-[12px] text-ledger hover:underline">
-        {all ? "Show top 5 only" : `Show ${s.length - 5} more signals`}
-      </button>
-    )}
+            </li>
+          );
+        })}
+      </ul>
+      {s.length > shown.length || all ? (
+        <button onClick={() => setAll((v) => !v)} className="mt-2 text-[13px] text-ink-2 hover:text-ink hover:underline">
+          {all ? "Show fewer" : `Show ${s.length - shown.length} more`}
+        </button>
+      ) : null}
     </>
+  );
+}
+
+/** One readable line: news keeps its headline, everything else its first sentence. */
+function headline(sig: ScoredSignal) {
+  const first = sig.text.split(/(?<=[.!?])\s+/)[0];
+  return first.length > 140 ? first.slice(0, 137).trimEnd() + "…" : first;
+}
+
+export function ProspectMini({ p, c }: { p?: Prospect; c?: CompanyInfo }) {
+  const [imgFailed, setImgFailed] = useState(false);
+  if (!p) return null;
+  return (
+    <div className="flex items-center gap-3">
+      {p.photo && !imgFailed ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={p.photo} alt="" onError={() => setImgFailed(true)} className="h-11 w-11 rounded-full object-cover" />
+      ) : (
+        <span className="grid h-11 w-11 place-items-center rounded-full bg-brand-soft text-[17px] font-semibold text-brand">{p.firstName?.[0]}</span>
+      )}
+      <div className="min-w-0">
+        <p className="truncate text-[15px] font-semibold leading-tight">{p.name}</p>
+        <p className="truncate text-[13px] text-ink-2">{p.title}{c?.name ? `, ${c.name}` : ""}</p>
+        {p.profileUrl && (
+          <a href={p.profileUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[12px] text-sky hover:underline">
+            LinkedIn <ExternalLink size={11} />
+          </a>
+        )}
+      </div>
+    </div>
   );
 }

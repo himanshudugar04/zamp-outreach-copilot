@@ -71,7 +71,9 @@ INPUT (JSON)
 - seller: name, about, products [{id, name, does, fits_when}],
   proof_points [{id, text}], never_say
 - purpose: name, goal, offer (may be empty), details (may be empty),
-  cta_examples, tone, length {min, max}, never_say, extra
+  cta_examples, tone, length {min, max}, guidance, never_say, extra.
+  purpose.guidance is the sales team's brief on how this message should
+  read. Follow it closely, within the hard rules below.
 - sender: name, role
 - prospect: first_name, title, company, executive (true/false)
 - hook: {source_id, usable_fact, date, angle}: the strongest timely signal
@@ -94,7 +96,8 @@ INPUT (JSON)
 - attempt: 1 for the first draft; above 1 means the rep asked for a fresh
   version, so change the wording noticeably while keeping every rule
 
-STRUCTURE: four short parts, each its own paragraph, in this order.
+STRUCTURE: four parts, each its own paragraph, in this order. Parts 2 and
+3 carry most of the words; parts 1 and 4 stay short.
 1. Who we are. One plain sentence introducing the sender and the seller,
    drawn from seller.about. Not a slogan, no adjectives like "leading".
 2. Why you, why now. The hook as a plain fact about them or their company
@@ -119,8 +122,7 @@ STRUCTURE: four short parts, each its own paragraph, in this order.
 
 HARD RULES
 - Body length within purpose.length (words, excluding greeting and
-  sign-off). If executive is true: stay at or under length.max anyway and
-  prefer the short end.
+  sign-off). Use the room for substance about them, never for filler.
 - Facts allowed only from seller.about, seller.products, seller.proof_points,
   hook, supporting, purpose.offer, purpose.details, rep_note and
   rep_feedback. No other numbers, names, customers or results.

@@ -98,3 +98,28 @@ export function downloadText(name: string, text: string) {
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+
+/** Insert a line at the end of a "## heading" section, creating the section if it is missing. */
+function appendToSection(md: string, heading: RegExp, title: string, line: string) {
+  const lines = md.replace(/\r\n?/g, "\n").split("\n");
+  const start = lines.findIndex((l) => /^\s*##\s+/.test(l) && heading.test(l));
+  if (start === -1) return `${md.trimEnd()}\n\n## ${title}\n${line}\n`;
+  let end = lines.findIndex((l, i) => i > start && /^\s*##\s+/.test(l));
+  if (end === -1) end = lines.length;
+  while (end > start + 1 && !lines[end - 1].trim()) end--;
+  lines.splice(end, 0, line);
+  return lines.join("\n");
+}
+
+export function addProofPoint(text: string, url?: string) {
+  const c = getCompanyFile();
+  const clean = text.trim().replace(/\s+/g, " ").replace(/[.\s]+$/, "");
+  const line = `- ${clean}${url?.trim() ? ` (source: ${url.trim()})` : ""}`;
+  setCompanyFile(appendToSection(c.md, /proof|case stud|result/i, "Proof points", line), c.fileName || "company.md");
+}
+
+export function addCompanyContext(text: string) {
+  const c = getCompanyFile();
+  const clean = text.trim();
+  setCompanyFile(appendToSection(c.md, /anything else|context|notes/i, "Anything else", clean), c.fileName || "company.md");
+}

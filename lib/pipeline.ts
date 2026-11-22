@@ -413,7 +413,8 @@ export interface WriteInput {
 export async function writeDraft(w: WriteInput): Promise<{ draft: Draft; quality?: QualityReport; tokens: number; calls: number }> {
   const p = resolvePlaybook(w.purpose, w.playbookMd);
   const seller: CompanyProfile = resolveCompany(w.companyMd);
-  const maxWords = w.executive ? Math.min(Math.max(p.length.max - 15, p.length.min + 10), p.length.max) : p.length.max;
+  const range = w.executive ? p.execLength : p.length;
+  const maxWords = range.max;
   const neverSay = [...seller.neverSay, ...p.neverSay];
   const feedback = (w.feedback || "").slice(0, 600);
   const base = {
@@ -431,7 +432,8 @@ export async function writeDraft(w: WriteInput): Promise<{ draft: Draft; quality
       details: p.details,
       cta_examples: p.ctaExamples,
       tone: p.tone,
-      length: { min: Math.min(p.length.min, maxWords - 15), max: maxWords },
+      length: range,
+      guidance: p.guidance,
       never_say: p.neverSay,
       extra: [p.extra, seller.extra].filter(Boolean).join("\n"),
     },

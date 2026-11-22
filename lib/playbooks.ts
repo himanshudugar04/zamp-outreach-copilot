@@ -51,6 +51,10 @@ export interface Playbook {
   jobKeywords: string[];
   ctaExamples: string[];
   length: { min: number; max: number };
+  /** Length when the prospect is VP or C-level */
+  execLength: { min: number; max: number };
+  /** Detailed guidance on how the message should read: the writer's main brief */
+  guidance: string;
   neverSay: string[];
   tone: string;
   extra: string;
@@ -158,7 +162,21 @@ SDR or Account Executive
 - Would a quick chat be useful?
 
 ## Length
-80 to 130 words
+175 to 200 words
+
+## Executive length
+125 to 150 words
+
+## Message guidance
+Write like a sharp account executive who did ten minutes of homework, not like a marketing email. The reader is a finance or operations leader who gets dozens of vendor emails a week and deletes anything generic in two seconds, so the first two lines after the greeting must prove this email is about them.
+
+Open part 2 with the most specific, recent fact about their company or about them: a hiring wave in AP or accounting, a new finance leader, a funding round, a public post or interview. Then explain, in one or two plain sentences, the operational pressure that fact usually creates. Talk about the work (invoice backlogs, approval delays, close taking too long, disputes piling up, onboarding queues), never about technology.
+
+When you name Zamp's product suites, tie each one directly to that pressure and say what it would take off their team's plate. Pick at most two suites. Use one proof point only if it matches the same workflow.
+
+Adjust to the reader. A CFO cares about headcount, close speed, control and audit risk. A Controller cares about reconciliations, accuracy and the close calendar. A Head of AP or Finance Ops cares about invoice volume, exceptions and approval chasing. A COO or Head of Operations cares about throughput and cost per transaction.
+
+Keep the tone warm, direct and peer to peer. No flattery, no hype, no "I hope you're well". End with a single easy question.
 `;
 
 export const EVENT_MD = `# Event invite
@@ -211,7 +229,19 @@ A seat at an invite-only dinner for finance leaders. No product pitch.
 - Should I hold a place for you?
 
 ## Length
-55 to 100 words
+175 to 200 words
+
+## Executive length
+125 to 150 words
+
+## Message guidance
+This is an invitation from a person, not an event announcement. The reader is a senior finance leader who is protective of their evenings, so the email has to make the dinner feel worth it for them specifically and make saying yes effortless.
+
+In part 2, connect them to the topic: something they posted or said, a change at their company that makes the topic live (AP hiring, a new ERP, a close that is under pressure), or their role in the city where the dinner happens. Say in plain words why peers in a similar seat find this conversation useful right now.
+
+In part 3, describe the evening concretely using only the playbook details: the name, date, time, city, how small the room is, who else is coming and what they will get out of it. Make clear there is no sales pitch.
+
+Keep it warm and personal, as if a well-connected colleague is saving them a seat. No pressure, no urgency tricks, no "limited spots". End with a simple yes or no question.
 
 ## Words to avoid
 - demo
@@ -280,8 +310,14 @@ Sponsorship of our annual summit with stage time and a booth.
 (Required) One to three example asks, one per line.
 - Open to a short call about it?
 
+## Message guidance
+(Recommended) A detailed brief, around 200 words: what a great message for this purpose sounds like, what to emphasise for each kind of reader, what to avoid. The more context here, the better the drafts.
+
 ## Length
-(Optional) e.g. 60 to 110 words
+(Optional) e.g. 175 to 200 words
+
+## Executive length
+(Optional) Length for VPs and C-level, e.g. 125 to 150 words
 
 ## Tone
 (Optional) e.g. warm and peer-to-peer, no hard sell
@@ -310,7 +346,7 @@ function splitSections(md: string) {
   }
   if (cur) sections.push({ heading: cur.heading, body: cur.lines.join("\n").trim() });
   // Drop template hints like "(Required) ..." lines so an unedited template reads as empty.
-  for (const s of sections) s.body = s.body.split("\n").filter((l) => !/^\s*\((required|optional)[^)]*\)/i.test(l)).join("\n").trim();
+  for (const s of sections) s.body = s.body.split("\n").filter((l) => !/^\s*\((required|optional|recommended)[^)]*\)/i.test(l)).join("\n").trim();
   return { title, sections };
 }
 
@@ -386,7 +422,9 @@ export function parsePlaybook(md: string, builtIn = false): ParseReport<Playbook
     avoid: [],
     jobKeywords: [],
     ctaExamples: [],
-    length: { min: 70, max: 120 },
+    length: { min: 175, max: 200 },
+    execLength: { min: 125, max: 150 },
+    guidance: "",
     neverSay: [],
     tone: "",
     extra: "",
@@ -399,7 +437,12 @@ export function parsePlaybook(md: string, builtIn = false): ParseReport<Playbook
     const h = s.heading.toLowerCase();
     if (!s.body) continue;
     const text = s.body.replace(/\n+/g, " ");
-    if (/goal|objective|aim/.test(h)) (v.goal = text), found.push("Goal");
+    if (/guidance|how to write|writing brief|message brief|instructions/.test(h)) (v.guidance = s.body.slice(0, 3000)), found.push("Message guidance");
+    else if (/exec|senior/.test(h) && /length|word/.test(h)) {
+      const nums = (s.body.match(/\d+/g) || []).map(Number).filter((n) => n >= 20 && n <= 400);
+      if (nums.length >= 2) v.execLength = { min: Math.min(nums[0], nums[1]), max: Math.max(nums[0], nums[1]) };
+      found.push(`Executive length (${v.execLength.min} to ${v.execLength.max})`);
+    } else if (/goal|objective|aim/.test(h)) (v.goal = text), found.push("Goal");
     else if (/who sends|sender|persona|sent by/.test(h)) (v.persona = text), found.push("Sender");
     else if (/target|roles|titles|who to contact|ideal/.test(h)) (v.targetRoles = items(s.body)), found.push(`Target roles (${v.targetRoles.length})`);
     else if (/ignore|avoid signal|weak|not a reason|don't use/.test(h)) (v.avoid = items(s.body)), found.push("Signals to ignore");
@@ -407,7 +450,7 @@ export function parsePlaybook(md: string, builtIn = false): ParseReport<Playbook
     else if (/hiring|job keyword|job title/.test(h)) (v.jobKeywords = items(s.body).slice(0, 20)), found.push("Hiring keywords");
     else if (/call to action|cta|the ask|ask$/.test(h)) (v.ctaExamples = items(s.body).slice(0, 5)), found.push("Call to action");
     else if (/length|word/.test(h) && !/avoid/.test(h)) {
-      const nums = (s.body.match(/\d+/g) || []).map(Number).filter((n) => n >= 20 && n <= 300);
+      const nums = (s.body.match(/\d+/g) || []).map(Number).filter((n) => n >= 20 && n <= 400);
       if (nums.length >= 2) v.length = { min: Math.min(nums[0], nums[1]), max: Math.max(nums[0], nums[1]) };
       else if (nums.length === 1) v.length = { min: Math.max(30, nums[0] - 40), max: nums[0] };
       found.push(`Length (${v.length.min} to ${v.length.max})`);

@@ -24,7 +24,6 @@ export function EdgePanel({
         <div className="min-w-0 flex-1">
           <h2 className="text-[16px] font-semibold">{edge.title}</h2>
           <p className="mt-1 text-[14px] text-ink-2">{edge.message}</p>
-          {!stop && <p className="mt-1 text-2xs text-ink-3">No draft was written and no OpenAI tokens were spent.</p>}
 
           {edge.kind === "moved" && edge.moved && (
             <div className="mt-4 flex flex-wrap gap-2">
