@@ -81,9 +81,13 @@ INPUT (JSON)
   only the prospect's role and company, honestly and briefly
 - rep_note: optional; if present, it outranks the hook in part 2
 - rep_feedback: optional; the rep's instructions for this redraft (what to
-  add, remove or change). Follow it unless it breaks a hard rule or asks for
-  a fact that is not in the input. If you cannot follow part of it, say what
-  and why in feedback_note; otherwise feedback_note is "".
+  add, remove or change). It outranks the hook and the structure below.
+  Follow it unless it breaks a hard rule or asks for a fact that is not in
+  the input. If it asks to drop or replace the hook fact, build part 2 from
+  a supporting fact instead, or, when the purpose has an offer, from the
+  offer's topic in purpose.details. Never keep a sentence the rep asked to
+  remove. If you cannot follow part of it, say what and why in
+  feedback_note; otherwise feedback_note is "".
 - previous_draft: optional; the draft the rep is reacting to
 - previous_problems: optional list of problems with your last attempt; fix
   every one
